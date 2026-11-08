@@ -2088,7 +2088,7 @@
   function activeT() { return space === 'hsv' ? state.v : (space === 'hvs' ? state.s : oklch.L); }
 
   /* 射线与"当前切面"求交：HSV 是圆盘，OKLCH 是色域在该 L 上的截面 */
-  function intersectSlice(ray) {
+  function intersectSlice(ray, clampOutside) {
     var y = activeT() * 2 - 1;
     var dy = ray.d[1];
     if (Math.abs(dy) < 1e-5) return null;
@@ -2107,7 +2107,12 @@
       }
       return p;
     }
-    if (r > 1.0) return null;
+    if (r > 1.0) {
+      /* 拖拽时超出色盘：以盘心为圆心的极坐标压回边缘，角度不变、颜色不跳 */
+      if (!clampOutside) return null;
+      var kk = 1 / r;
+      p = [p[0] * kk, p[1], p[2] * kk];
+    }
     return p;
   }
 
@@ -2185,6 +2190,60 @@
       }
       prevT = t;
       prevG = g;
+    }
+    return null;
+  }
+
+  /* ---- 曲面拖到面外：把指针压回边界 ---- */
+  var SHEET_RING = [8, 16, 32, 64, 128, 256];
+  var SHEET_DIR = [];
+  for (var sdi = 0; sdi < 12; sdi++) {
+    var sda = sdi / 12 * Math.PI * 2;
+    SHEET_DIR.push([Math.cos(sda), Math.sin(sda)]);
+  }
+  function sheetCast(x, y, basis) { return intersectSheet(makeRay(x, y, basis)); }
+  /* 沿一条屏幕射线从近到远找第一处交点，再在半径上二分到贴住边界 */
+  function sheetRayHit(p, dx, dy, dist, basis) {
+    var STEPS = 14, prev = 0, found = -1;
+    for (var i = 1; i <= STEPS; i++) {
+      var s = dist * (i / STEPS);
+      if (sheetCast(p.x + dx * s, p.y + dy * s, basis)) { found = s; break; }
+      prev = s;
+    }
+    if (found < 0) return null;
+    var lo = prev, hi = found;
+    for (var k = 0; k < 7; k++) {
+      var mid = 0.5 * (lo + hi);
+      if (sheetCast(p.x + dx * mid, p.y + dy * mid, basis)) hi = mid; else lo = mid;
+    }
+    return sheetCast(p.x + dx * hi, p.y + dy * hi, basis);
+  }
+  function sheetPull(p, basis) {
+    /* 先按"朝模型轴线压回"：轴线段上离指针最近的那一点 */
+    var a = project([0, -1, 0], basis), b = project([0, 1, 0], basis);
+    if (a && b) {
+      var ax = b[0] - a[0], ay = b[1] - a[1];
+      var len2 = ax * ax + ay * ay;
+      var u = len2 > 1e-6 ? clamp(((p.x - a[0]) * ax + (p.y - a[1]) * ay) / len2, 0, 1) : 0.5;
+      var vx = a[0] + ax * u - p.x, vy = a[1] + ay * u - p.y;
+      var dist = Math.hypot(vx, vy);
+      if (dist > 2) {
+        var near = sheetRayHit(p, vx / dist, vy / dist, dist, basis);
+        if (near) return near;
+      }
+    }
+    /* 曲面经常在指针的上方或下方，水平压回会落空：改找一圈里最近的面点 */
+    for (var ri = 0; ri < SHEET_RING.length; ri++) {
+      for (var di = 0; di < SHEET_DIR.length; di++) {
+        var dx = SHEET_DIR[di][0], dy = SHEET_DIR[di][1];
+        if (!sheetCast(p.x + dx * SHEET_RING[ri], p.y + dy * SHEET_RING[ri], basis)) continue;
+        var lo = ri > 0 ? SHEET_RING[ri - 1] : 1, hi = SHEET_RING[ri];
+        for (var k2 = 0; k2 < 7; k2++) {
+          var mid2 = 0.5 * (lo + hi);
+          if (sheetCast(p.x + dx * mid2, p.y + dy * mid2, basis)) hi = mid2; else lo = mid2;
+        }
+        return sheetCast(p.x + dx * hi, p.y + dy * hi, basis);
+      }
     }
     return null;
   }
@@ -3683,9 +3742,9 @@
   canvas.addEventListener('mousedown', function (e) { if (e.button === 1) e.preventDefault(); });
 
   /* 射线是否落在"当前那张面"上 */
-  function hitPlane(ray) {
-    if (space === 'oklch') return intersectSlice(ray);
-    return (space !== 'oklch' && (isoLum || isoGray)) ? intersectSheet(ray) : intersectSlice(ray);
+  function hitPlane(ray, clampOutside) {
+    if (space === 'oklch') return intersectSlice(ray, clampOutside);
+    return (isoLum || isoGray) ? intersectSheet(ray) : intersectSlice(ray, clampOutside);
   }
   /* 在"当前那张面"上取色：HSV 保持 V，OKLCH 保持 L */
   function applyPlanePick(pt) {
@@ -3850,7 +3909,8 @@
     } else if (drag.mode === 'plane' || drag.mode === 'shell') {
       var b1 = lastBasis || camBasis();
       var r1 = makeRay(p.x, p.y, b1);
-      var hit = drag.mode === 'plane' ? hitPlane(r1) : (space === 'oklch' ? intersectGamut(r1) : intersectShell(r1));
+      var hit = drag.mode === 'plane' ? hitPlane(r1, true) : (space === 'oklch' ? intersectGamut(r1) : intersectShell(r1));
+      if (!hit && drag.mode === 'plane' && (isoLum || isoGray)) hit = sheetPull(p, b1);
       if (hit) { if (drag.mode === 'plane') applyPlanePick(hit); else applyShellPick(hit); }
     } else if (drag.mode === 'stop') {
       var b2 = lastBasis || camBasis();
