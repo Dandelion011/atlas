@@ -166,3 +166,10 @@
 - 界面是纯 CSS 的网格：顶栏 46px + 台面三列（读数 / 视口 / 整备）；窄屏下整台设备竖排，视口 52dvh，下面的列随页面滚动。
 - 历史色带是 24 格环形：颜色**稳定 300ms** 才记一笔，所以拖模型、拖渐变条的过程不会把历史灌满；跳回历史时用 `noHist` 标记跳过记录，不会再补一笔。
 - ASE 是手写的二进制：`ASEF` + 版本 + 块数，每组一个 `0xC001` 组头、若干 `0x0001` 色块（`'RGB '` + 三个 float32）、一个 `0xC002` 组尾。没有第三方库。
+
+## SAI2 插件（本分支）
+
+`feat/sai2-plugin` 分支把 ColorWitch 做成 PaintTool SAI Ver.2 里的取色面板：三维取色 → 直接写进 SAI2 前景色，SAI2 改色面板也跟着变。普通 `index.html` 完全不受影响。
+
+安装与用法见 [plugin/README.md](plugin/README.md)，颜色桥的逆向细节见 [plugin/docs/BRIDGE.md](plugin/docs/BRIDGE.md)。
+

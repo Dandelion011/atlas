@@ -5,3 +5,9 @@ index.pre-refactor.html
 Thumbs.db
 desktop.ini
 .DS_Store
+
+# SAI2 插件宿主的构建产物
+plugin/host/bin/
+plugin/host/obj/
+plugin/dist/
+plugin/webview-data/

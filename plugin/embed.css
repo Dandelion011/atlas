@@ -1,0 +1,171 @@
+/* =========================================================================
+   ColorWitch · SAI2 插件面板 · 嵌入模式样式
+   -------------------------------------------------------------------------
+   宿主（WPF + WebView2）加载 index.html?embed=1 后注入本文件 + embed.js。
+   所有规则都挂在 html.cw-embed 下（由 embed.js 加上），普通打开 index.html
+   完全不受影响。设计系统沿用 README：纸面 #F4F4F2 / 板 #FFFFFF /
+   墨 #161616 / 次要墨 #5C5C5C / 细线 #D9D9D6 / 荧光蓝 #1F51FF；
+   字号只用 9.5 / 10 / 11 / 12；无圆角、无阴影、1px 细线分区。
+
+   布局（380 宽）：
+     三色条 3 + 顶栏 44 + 三维视口 340（可压缩到 220）
+     + 下方面板（弹性：当前色大色块 / HEX / 历史色带 / 三条坐标）
+     + 底部操作条 44
+   ========================================================================= */
+
+/* ---------- 页面骨架：竖向三段 ---------- */
+html.cw-embed,
+html.cw-embed body{height:100%}
+html.cw-embed{background:var(--paper)}
+html.cw-embed body{display:flex;flex-direction:column;overflow:hidden;background:var(--paper)}
+
+/* ---------- 顶栏：只留空间切换、当前 HEX、操作说明 ---------- */
+/* 三色条是整页的装饰，插件面板里不要（否则顶部会露出一条彩色细条） */
+html.cw-embed .tri{display:none}
+html.cw-embed .cmd{flex:none;height:44px;gap:8px;padding-inline:10px}
+html.cw-embed .cmd .brand{display:none}
+html.cw-embed .cmd .spaces button{padding:0 9px;font-size:11px;letter-spacing:.12em}
+html.cw-embed .cmd .status{gap:4px}
+html.cw-embed .cmd .mini{padding:4px 6px;letter-spacing:.02em}
+html.cw-embed #copyBtn,
+html.cw-embed #linkBtn,
+html.cw-embed #pickBtn{display:none!important}
+
+/* ---------- 台面：三维视口 + 下方面板 ---------- */
+html.cw-embed #deck{
+  display:flex;flex-direction:column;
+  height:auto;flex:1 1 auto;min-height:0;
+}
+html.cw-embed #rail{display:none}
+html.cw-embed #panel{display:none}
+html.cw-embed #stage{
+  flex:0 1 340px;height:340px;min-height:220px;
+  border-left:0;border-right:0;border-bottom:1px solid var(--ink);
+}
+html.cw-embed .tools.top{top:10px;right:10px;gap:5px}
+html.cw-embed .tools.export{display:none}
+html.cw-embed .dbtn{padding:6px 9px 5px;font-size:11px}
+
+/* ---------- 下方面板：色块 / HEX / 历史 / 三条坐标 ---------- */
+html.cw-embed #cwShelf{
+  flex:1 1 auto;min-height:0;overflow:hidden;
+  display:flex;flex-direction:column;gap:10px;
+  padding:14px;
+  background-color:var(--paper);
+  background-image:repeating-linear-gradient(45deg,rgba(22,22,22,.055) 0 1.5px,transparent 1.5px 6.5px);
+}
+
+/* 当前色：占满剩余高度的大色块，#swatch 由页面脚本刷底色、#swHex 在左下角 */
+html.cw-embed .cw-well{
+  position:relative;flex:1 1 auto;min-height:110px;
+  border:1px solid var(--ink);background:#000;overflow:hidden;
+}
+html.cw-embed .cw-well #swatch{width:100%;height:100%;padding:7px 9px;border:0}
+
+/* HEX 可编辑：标签在左，输入占满其余宽度；右边两枚 16px 小色块 */
+html.cw-embed .cw-hexline{
+  flex:none;display:flex;align-items:center;gap:10px;min-width:0;
+}
+html.cw-embed #cwShelf .hexrow{
+  flex:1 1 auto;min-width:0;margin:0;
+  grid-template-columns:34px minmax(0,1fr);gap:8px;
+}
+html.cw-embed #cwShelf .hexrow>span{font-size:9.5px;letter-spacing:.14em}
+html.cw-embed #cwShelf .hexrow input{
+  height:32px;padding:0 9px;
+  font-size:12px;letter-spacing:.08em;
+}
+
+/* 当前色 / 去色：两枚 16px 直角色块，只是读数，不可点 */
+html.cw-embed .cw-swatches{
+  flex:none;display:flex;gap:4px;
+}
+html.cw-embed .cw-swatches > *{
+  width:16px;height:16px;flex:none;display:block;
+  border:1px solid var(--ink);background:#000;overflow:hidden;
+}
+html.cw-embed .cw-swatches .graywell{
+  display:block;padding:0;border-top:1px solid var(--ink);position:relative;
+}
+html.cw-embed .cw-swatches .graywell .glab,
+html.cw-embed .cw-swatches .graywell .rhex{display:none}
+
+/* 三条坐标：H / S / V（OKLCH 时换成 H / C / L，标签由页面脚本改） */
+html.cw-embed .cw-sliders{
+  flex:none;display:flex;flex-direction:column;gap:10px;
+  padding-top:12px;border-top:1px solid var(--line);
+}
+html.cw-embed .cw-sliders .srow{grid-template-columns:14px minmax(0,1fr) 52px;gap:10px}
+html.cw-embed .cw-sliders .srow+.srow{margin-top:0}
+html.cw-embed .cw-sliders .srow>label{font-size:10px;letter-spacing:.14em}
+html.cw-embed .cw-sliders .num{padding:4px 2px}
+
+/* ---------- 底部操作条 ---------- */
+html.cw-embed #cwBar{
+  flex:none;display:flex;align-items:center;justify-content:space-between;gap:6px;
+  height:44px;padding:0 8px 0 10px;
+  background:var(--paper);border-top:1px solid var(--line);
+}
+/* 右端一组：贴靠/浮动 + 状态点，点距右边缘 8px */
+html.cw-embed .cw-tail{
+  flex:none;display:flex;align-items:center;gap:8px;
+}
+
+/* 主按钮：荧光蓝填充、白字、右下切角 */
+html.cw-embed .cw-apply{
+  flex:none;display:inline-flex;align-items:center;justify-content:center;
+  height:30px;padding:0 12px;border:0;cursor:pointer;white-space:nowrap;
+  background:var(--signal);color:var(--on-signal);
+  font-size:11px;font-weight:700;letter-spacing:.02em;line-height:1;
+  clip-path:polygon(0 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%);
+  transition:background var(--fast) var(--ease),color var(--fast) var(--ease);
+}
+html.cw-embed .cw-apply:hover{background:var(--ink);color:var(--paper)}
+html.cw-embed .cw-apply:active{transform:translateY(1px)}
+/* apply:ack 确认：短暂反色 */
+html.cw-embed .cw-apply.cw-ack{
+  background:var(--paper);color:var(--signal);
+  box-shadow:inset 0 0 0 1px var(--signal);
+}
+
+/* 次按钮：切角、浅底 */
+html.cw-embed .cw-btn{
+  flex:none;display:inline-flex;align-items:center;justify-content:center;
+  height:30px;padding:0 9px;border:0;cursor:pointer;white-space:nowrap;
+  background:var(--chip);color:var(--ink);
+  font-size:11px;font-weight:700;letter-spacing:.02em;line-height:1;
+  clip-path:polygon(0 0,100% 0,100% calc(100% - 5px),calc(100% - 5px) 100%,0 100%);
+  transition:background var(--fast) var(--ease),color var(--fast) var(--ease);
+}
+html.cw-embed .cw-btn:hover{background:var(--signal);color:var(--on-signal)}
+html.cw-embed .cw-btn:active{transform:translateY(1px)}
+html.cw-embed .cw-attach{min-width:38px}
+
+/* 实时同步：沿用页面自己的勾选框（选中时墨色填充） */
+html.cw-embed .cw-live{flex:none;gap:6px;font-size:11px;padding:0 2px;white-space:nowrap}
+html.cw-embed .cw-live i{width:12px;height:12px}
+
+/* 桥接状态：只有一个 6px 圆点；已连接荧光蓝、未连接灰、error 红 */
+html.cw-embed .cw-status{
+  flex:none;display:inline-flex;align-items:center;
+  cursor:default;
+}
+html.cw-embed .cw-status i{
+  width:6px;height:6px;flex:none;border-radius:50%;
+  background:var(--line);
+}
+html.cw-embed .cw-status.ok i{background:var(--signal)}
+html.cw-embed .cw-status.na i{background:var(--line)}
+html.cw-embed .cw-status.err i{background:var(--danger)}
+
+/* 焦点环：深底/亮底各用能看见的颜色 */
+html.cw-embed .cw-apply:focus-visible,
+html.cw-embed .cw-btn:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+html.cw-embed .cw-status{outline:none}
+
+/* ---------- 窄面板（宿主可把宽度调到 340） ---------- */
+@media (max-width:369px){
+  html.cw-embed #cwBar{gap:4px;padding:0 8px}
+  html.cw-embed .cw-apply{padding:0 10px}
+  html.cw-embed #cwShelf{padding:12px}
+}

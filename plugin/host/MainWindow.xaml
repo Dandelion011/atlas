@@ -1,0 +1,46 @@
+<Window x:Class="ColorWitch.Sai2.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        Title="ColorWitch for SAI2"
+        Width="380" Height="820"
+        WindowStyle="None" ResizeMode="NoResize" ShowInTaskbar="False"
+        ShowActivated="False" Focusable="True"
+        Background="#F4F4F2" UseLayoutRounding="True"
+        SnapsToDevicePixels="True" Topmost="False">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="26"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Background="#FFFFFF" BorderBrush="#D9D9D6" BorderThickness="0,0,0,1"
+                MouseLeftButtonDown="Chrome_MouseLeftButtonDown">
+            <Grid Margin="8,0,4,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="ColorWitch"
+                           FontSize="11" FontWeight="SemiBold" Foreground="#161616"
+                           FontFamily="Segoe UI"/>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
+                    <Ellipse x:Name="StatusDot" Width="6" Height="6" Fill="#D9D9D6" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="StatusText" Text="SAI2" FontSize="9.5" Foreground="#5C5C5C"
+                               Margin="5,0,0,0" VerticalAlignment="Center" FontFamily="Segoe UI"/>
+                </StackPanel>
+                <Button x:Name="AttachButton" Grid.Column="2" Content="浮动" FontSize="10"
+                        Padding="6,1" Margin="0,0,4,0" MinWidth="34"
+                        Background="Transparent" BorderBrush="#D9D9D6" Foreground="#161616"
+                        Click="AttachButton_Click" ToolTip="贴靠 SAI2 / 独立浮动"/>
+                <Button x:Name="CloseButton" Grid.Column="3" Content="×" FontSize="13"
+                        Padding="6,0" MinWidth="24" Background="Transparent" BorderThickness="0"
+                        Foreground="#5C5C5C" Click="CloseButton_Click" ToolTip="关闭面板"/>
+            </Grid>
+        </Border>
+
+        <wv2:WebView2 x:Name="Web" Grid.Row="1" DefaultBackgroundColor="#F4F4F2"/>
+    </Grid>
+</Window>
