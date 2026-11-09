@@ -9,6 +9,10 @@ $repo = Split-Path -Parent $plugin               # repo root
 $hostDir = Join-Path $plugin 'host'
 $dist = Join-Path $plugin 'dist'
 
+Write-Host 'Cleaning dist...'
+if (Test-Path $dist) { Remove-Item $dist -Recurse -Force }
+New-Item -ItemType Directory -Force -Path $dist | Out-Null
+
 Write-Host "Building host ($Configuration)..."
 $publishArgs = @('publish', (Join-Path $hostDir 'ColorWitch.Sai2.csproj'), '-c', $Configuration, '-o', $dist)
 & dotnet @publishArgs

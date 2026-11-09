@@ -26,6 +26,11 @@ if (-not (Test-Path (Join-Path $dist 'ColorWitch.Sai2.exe'))) {
 
 $target = Join-Path $Sai2Path 'ColorWitch'
 Write-Host "Installing to $target"
+
+# stop a running panel instance so files can be replaced
+Get-Process ColorWitch.Sai2 -ErrorAction SilentlyContinue | Stop-Process -Force
+Start-Sleep -Milliseconds 400
+
 New-Item -ItemType Directory -Force -Path $target | Out-Null
 Copy-Item (Join-Path $dist '*') $target -Recurse -Force
 
