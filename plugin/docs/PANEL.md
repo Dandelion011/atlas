@@ -7,11 +7,11 @@
 
 ## 宿主注入顺序
 
-宿主（`ColorWitch.Sai2.exe`）用 `https://colorwitch.local/` 虚拟主机加载 `index.html?embed=1`，在 `NavigationCompleted` 之后：
+宿主（`Atlas.Sai2.exe`）用 `https://atlas.app/` 虚拟主机加载 `index.html?embed=1`，在 `NavigationCompleted` 之后：
 
-1. `ExecuteScriptAsync(prelude)`：挂 `window.__cwLog`，把页面里的 `error` / `console.error` / `console.warn` 转进宿主日志（只在 `CW_DEBUG=1` 时写文件）。
-2. 注入 `<style id="cw-embed-style">`，内容是 `embed.css`。
-3. `ExecuteScriptAsync(embed.js)`：挂 `html.cw-embed`、量命令栏高度、建 `#cwBar`、接桥、加导出拦截。
+1. `ExecuteScriptAsync(prelude)`：挂 `window.__atlasLog`，把页面里的 `error` / `console.error` / `console.warn` 转进宿主日志（只在 `ATLAS_DEBUG=1` 时写文件）。
+2. 注入 `<style id="atlas-embed-style">`，内容是 `embed.css`。
+3. `ExecuteScriptAsync(embed.js)`：挂 `html.atlas-embed`、量命令栏高度、建 `#atlasBar`、接桥、加导出拦截。
 4. 宿主推 `sai2:state` / `sai2:color` 做首次同步。
 
 `embed.js` 自身也判断 `?embed=1`，普通打开 `index.html` 时直接返回，没有任何副作用。
@@ -20,11 +20,11 @@
 
 | 改动 | 说明 |
 |---|---|
-| `html` 加 `.cw-embed` | `embed.css` 的所有规则都挂在这个 class 下 |
-| 量 `header.cmd` 高度 → `--cw-cmd-h` | 命令栏在窄宽度会换行，内容区按实际高度算 |
+| `html` 加 `.atlas-embed` | `embed.css` 的所有规则都挂在这个 class 下 |
+| 量 `header.cmd` 高度 → `--atlas-cmd-h` | 命令栏在窄宽度会换行，内容区按实际高度算 |
 | `#deck` 高度 = `100dvh − 命令栏 − 底栏` | 页面自己的滚动（`#panel` / `#deck`）继续工作 |
-| 底部加 `#cwBar` | 应用到 SAI2 / 读取当前色 / 实时同步 / 贴靠 / 状态点 |
-| 接 `window.__cwFromHost` | 宿主推来的状态与颜色 |
+| 底部加 `#atlasBar` | 应用到 SAI2 / 读取当前色 / 实时同步 / 贴靠 / 状态点 |
+| 接 `window.__atlasFromHost` | 宿主推来的状态与颜色 |
 | 拦截 `<a download>` 点击 | 导出交给宿主保存（见下） |
 
 **没有移动、隐藏或删除任何原页面模块。** 380 宽时靠页面自己的 `@media (max-width:940px)` 变成单列滚动；1180 宽时是原版三栏。
@@ -66,7 +66,7 @@
 
 | 能力 | 说明 |
 |---|---|
-| 来源 | `https://colorwitch.local`（`SetVirtualHostNameToFolderMapping` 指向安装目录） |
+| 来源 | `https://atlas.app`（`SetVirtualHostNameToFolderMapping` 指向安装目录） |
 | 安全上下文 | 是（`EyeDropper` 可用，实测 `typeof EyeDropper === "function"`） |
 | 剪贴板 | `navigator.clipboard.writeText` 可用（复制 HEX / 复制链接 / 复制渐变） |
 | `localStorage` | 可用（色板、自建色卡持久化） |

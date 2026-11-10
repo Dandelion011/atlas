@@ -2,7 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 
-namespace ColorWitch.Sai2;
+namespace Atlas.Sai2;
 
 /// <summary>
 /// Dev-only: verifies the Win32 glue used by the colour bridge (OpenProcess,

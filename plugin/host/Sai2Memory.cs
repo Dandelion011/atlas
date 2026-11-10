@@ -2,7 +2,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace ColorWitch.Sai2;
+namespace Atlas.Sai2;
 
 /// <summary>
 /// Direct state access to the SAI2 foreground colour.

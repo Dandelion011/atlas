@@ -1,4 +1,4 @@
-# ColorWitch for SAI2 - build
+# Atlas for SAI2 - build
 param(
     [string]$Configuration = 'Release'
 )
@@ -14,7 +14,7 @@ if (Test-Path $dist) { Remove-Item $dist -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $dist | Out-Null
 
 Write-Host "Building host ($Configuration)..."
-$publishArgs = @('publish', (Join-Path $hostDir 'ColorWitch.Sai2.csproj'), '-c', $Configuration, '-o', $dist)
+$publishArgs = @('publish', (Join-Path $hostDir 'Atlas.Sai2.csproj'), '-c', $Configuration, '-o', $dist)
 & dotnet @publishArgs
 $dotnetExit = $LASTEXITCODE
 Write-Host "dotnet publish exit=$dotnetExit"

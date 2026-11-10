@@ -1,11 +1,11 @@
 /* =========================================================================
-   ColorWitch · SAI2 插件面板 · 嵌入脚本
+   Atlas · SAI2 插件面板 · 嵌入脚本
    -------------------------------------------------------------------------
    用法：宿主加载 index.html?embed=1，页面加载完成后注入（先 embed.css，再
    执行本文件）。本文件不改动页面的任何功能，只做四件事：
-     1. 在 <html> 上挂 .cw-embed，让 embed.css 生效；
+     1. 在 <html> 上挂 .atlas-embed，让 embed.css 生效；
      2. 量一次命令栏高度，交给 CSS 算内容区（#deck）的可用高度；
-     3. 在底部加 #cwBar：应用到 SAI2 / 读取当前色 / 实时同步 / 贴靠 / 状态点；
+     3. 在底部加 #atlasBar：应用到 SAI2 / 读取当前色 / 实时同步 / 贴靠 / 状态点；
      4. 接宿主消息桥，并在拖拽取色时按 ≤30Hz 节流发 app:apply。
 
    原页面的全部模块（读数图、色板、历史、渐变、色卡、L/Y、切面开关、
@@ -13,7 +13,7 @@
    由页面自己的响应式断点决定 380 宽单列 / 1180 宽三栏。
 
    没有 ?embed=1 时本文件立即返回，普通打开 index.html 完全不受影响。
-   浏览器里没有 chrome.webview 时用 window.__cwHostMock 模拟宿主。
+   浏览器里没有 chrome.webview 时用 window.__atlasHostMock 模拟宿主。
 
    契约见 plugin/CONTRACT.md。
    ========================================================================= */
@@ -26,50 +26,50 @@
 
   /* 尽早挂上 class：embed.css 的规则全挂在这下面 */
   function markRoot() {
-    if (document.documentElement) document.documentElement.classList.add('cw-embed');
+    if (document.documentElement) document.documentElement.classList.add('atlas-embed');
   }
   markRoot();
 
   function boot() {
     /* 防重复注入：宿主重载页面时 window 会重建，这里只防同一页面注入两次 */
-    if (document.getElementById('cwBar')) return;
+    if (document.getElementById('atlasBar')) return;
 
     var cmd = document.querySelector('header.cmd');
     var cmdHex = document.getElementById('cmdHex');
     var hexIn = document.getElementById('hexIn');
     if (!cmdHex || !hexIn) {
-      console.warn('[ColorWitch] 嵌入模式找不到必需的 DOM 节点（index.html 结构变了？）');
+      console.warn('[Atlas] 嵌入模式找不到必需的 DOM 节点（index.html 结构变了？）');
       return;
     }
 
     /* ---- 1. 量命令栏高度：它会在窄宽度换行，内容区高度按实际值算 ---- */
     function measureHeader() {
       var h = cmd ? cmd.getBoundingClientRect().height : 46;
-      if (h > 0) document.documentElement.style.setProperty('--cw-cmd-h', Math.round(h) + 'px');
+      if (h > 0) document.documentElement.style.setProperty('--atlas-cmd-h', Math.round(h) + 'px');
     }
     measureHeader();
 
     /* ---- 2. 底部操作条 ---- */
     var bar = document.createElement('div');
-    bar.id = 'cwBar';
+    bar.id = 'atlasBar';
     bar.setAttribute('role', 'toolbar');
     bar.setAttribute('aria-label', 'SAI2 操作');
     bar.innerHTML =
-      '<button type="button" id="cwApply" class="cw-apply">应用到 SAI2</button>' +
-      '<button type="button" id="cwRead" class="cw-btn" title="让宿主读一次 SAI2 前景色">读取当前色</button>' +
-      '<label class="cw-live" title="勾上后拖拽取色时实时写进 SAI2"><input type="checkbox" id="cwLive"><span>实时同步</span></label>' +
-      '<span class="cw-spacer"></span>' +
-      '<span class="cw-tail">' +
-        '<button type="button" id="cwAttach" class="cw-btn cw-attach" title="贴靠到 SAI2 侧边">贴靠</button>' +
-        '<span id="cwStatus" class="cw-status" title="宿主桥接：未连接"><i></i></span>' +
+      '<button type="button" id="atlasApply" class="atlas-apply">应用到 SAI2</button>' +
+      '<button type="button" id="atlasRead" class="atlas-btn" title="让宿主读一次 SAI2 前景色">读取当前色</button>' +
+      '<label class="atlas-live" title="勾上后拖拽取色时实时写进 SAI2"><input type="checkbox" id="atlasLive"><span>实时同步</span></label>' +
+      '<span class="atlas-spacer"></span>' +
+      '<span class="atlas-tail">' +
+        '<button type="button" id="atlasAttach" class="atlas-btn atlas-attach" title="贴靠到 SAI2 侧边">贴靠</button>' +
+        '<span id="atlasStatus" class="atlas-status" title="宿主桥接：未连接"><i></i></span>' +
       '</span>';
     document.body.appendChild(bar);
 
-    var applyBtn = document.getElementById('cwApply');
-    var readBtn = document.getElementById('cwRead');
-    var attachBtn = document.getElementById('cwAttach');
-    var liveBox = document.getElementById('cwLive');
-    var statusEl = document.getElementById('cwStatus');
+    var applyBtn = document.getElementById('atlasApply');
+    var readBtn = document.getElementById('atlasRead');
+    var attachBtn = document.getElementById('atlasAttach');
+    var liveBox = document.getElementById('atlasLive');
+    var statusEl = document.getElementById('atlasStatus');
 
     /* ---- 3. 颜色桥 ---- */
     var webview = window.chrome && window.chrome.webview;
@@ -77,7 +77,7 @@
 
     function post(msg) {
       if (hasWebView) webview.postMessage(msg);
-      else if (window.__cwHostMock) window.__cwHostMock.postMessage(msg);
+      else if (window.__atlasHostMock) window.__atlasHostMock.postMessage(msg);
     }
 
     function normHex(v) {
@@ -139,7 +139,7 @@
         if (msg.ok === true) flashAck();
       }
     }
-    window.__cwFromHost = handleHostMessage;
+    window.__atlasFromHost = handleHostMessage;
 
     /* 宿主若用 PostWebMessageAsJson 送达，也能收到（两种通道都认） */
     if (webview && typeof webview.addEventListener === 'function') {
@@ -148,9 +148,9 @@
 
     var ackTimer = 0;
     function flashAck() {
-      applyBtn.classList.add('cw-ack');
+      applyBtn.classList.add('atlas-ack');
       clearTimeout(ackTimer);
-      ackTimer = setTimeout(function () { applyBtn.classList.remove('cw-ack'); }, 120);
+      ackTimer = setTimeout(function () { applyBtn.classList.remove('atlas-ack'); }, 120);
     }
 
     /* ---- 4. 页面导出：拦下载链接，内容交给宿主保存 ----
@@ -164,7 +164,7 @@
       if (!a) return;
       e.preventDefault();
       e.stopPropagation();
-      var name = a.getAttribute('download') || 'colorwitch-export';
+      var name = a.getAttribute('download') || 'atlas-export';
       var href = a.href;
       fetch(href).then(function (r) { return r.blob(); }).then(function (blob) {
         var fr = new FileReader();
@@ -175,7 +175,7 @@
         };
         fr.readAsDataURL(blob);
       }).catch(function (err) {
-        console.warn('[ColorWitch] 导出失败', err);
+        console.warn('[Atlas] 导出失败', err);
       });
     }, true);
 
@@ -284,7 +284,7 @@
         sent: [],
         postMessage: function (msg) {
           this.sent.push(msg);
-          console.log('[ColorWitch → 宿主 mock]', msg.type, msg);
+          console.log('[Atlas → 宿主 mock]', msg.type, msg);
           var self = this;
           if (msg.type === 'app:apply') {
             self.color = msg.hex;
@@ -303,7 +303,7 @@
           }
         }
       };
-      window.__cwHostMock = mock;
+      window.__atlasHostMock = mock;
       handleHostMessage({ type: 'sai2:state', attached: true, visible: true, bridge: 'ok' });
       handleHostMessage({ type: 'sai2:color', hex: mock.color });
     }

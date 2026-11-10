@@ -169,7 +169,7 @@
 
 ## SAI2 插件（本分支）
 
-`feat/sai2-plugin` 分支把 ColorWitch 做成 PaintTool SAI Ver.2 里的取色面板：三维取色 → 直接写进 SAI2 前景色，SAI2 改色面板也跟着变。普通 `index.html` 完全不受影响。
+`feat/sai2-plugin` 分支把 Atlas 做成 PaintTool SAI Ver.2 里的取色面板：三维取色 → 直接写进 SAI2 前景色，SAI2 改色面板也跟着变。普通 `index.html` 完全不受影响。
 
 安装与用法见 [plugin/README.md](plugin/README.md)，颜色桥的逆向细节见 [plugin/docs/BRIDGE.md](plugin/docs/BRIDGE.md)。
 

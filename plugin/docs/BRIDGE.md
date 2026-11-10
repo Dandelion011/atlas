@@ -148,6 +148,6 @@ void __fastcall FUN_140194fd0(float *vsh)     // 参数指向 0x47A7F8
 | RVA / VHSV 换算 | Ghidra 正逆变换 + 2000 随机色 round-trip | 2000/2000 一致 |
 | 读路径 | 对运行中的 SAI2 副本：内存读 + 窗口字段交叉校验 | 一致，0.005 ms/次 |
 | 写路径 | Python 参考实现对 SAI2 副本 | 4×200 次全成功，界面同步刷新 |
-| C# P/Invoke 链路 | `ColorWitch.Sai2.exe --selftest-memory`（对临时子进程做 OpenProcess / Read/WriteProcessMemory / VirtualAllocEx / CreateRemoteThread） | 全部通过 |
-| C# 写 SAI2 | `ColorWitch.Sai2.exe --set-color` / 面板「应用到 SAI2」/ `--stress 200`（对 SAI2 副本） | 单次写入读回一致；200 次随机色连写 200/200，平均 2.37 ms、最大 5.02 ms，SAI2 界面同步刷新、进程保持响应 |
+| C# P/Invoke 链路 | `Atlas.Sai2.exe --selftest-memory`（对临时子进程做 OpenProcess / Read/WriteProcessMemory / VirtualAllocEx / CreateRemoteThread） | 全部通过 |
+| C# 写 SAI2 | `Atlas.Sai2.exe --set-color` / 面板「应用到 SAI2」/ `--stress 200`（对 SAI2 副本） | 单次写入读回一致；200 次随机色连写 200/200，平均 2.37 ms、最大 5.02 ms，SAI2 界面同步刷新、进程保持响应 |
 

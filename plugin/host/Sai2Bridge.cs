@@ -4,7 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace ColorWitch.Sai2;
+namespace Atlas.Sai2;
 
 public enum BridgeStatus
 {

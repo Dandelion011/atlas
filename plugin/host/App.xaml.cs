@@ -2,7 +2,7 @@ using System.IO;
 using System.Threading;
 using System.Windows;
 
-namespace ColorWitch.Sai2;
+namespace Atlas.Sai2;
 
 public partial class App : Application
 {
@@ -11,8 +11,8 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         // 命令行工具模式（供自动化验证 / 排查用）：
-        //   ColorWitch.Sai2.exe --get-color [--out file]
-        //   ColorWitch.Sai2.exe --set-color #RRGGBB [--out file]
+        //   Atlas.Sai2.exe --get-color [--out file]
+        //   Atlas.Sai2.exe --set-color #RRGGBB [--out file]
         var args = e.Args ?? Array.Empty<string>();
         if (args.Length > 0 && args[0] == "--selftest-memory")
         {
@@ -74,10 +74,10 @@ public partial class App : Application
             return;
         }
 
-        _mutex = new Mutex(true, @"Local\ColorWitch.Sai2.Singleton", out var createdNew);
+        _mutex = new Mutex(true, @"Local\Atlas.Sai2.Singleton", out var createdNew);
         if (!createdNew)
         {
-            MessageBox.Show("ColorWitch 面板已在运行（按 Ctrl+Alt+C 显示/隐藏）。", "ColorWitch for SAI2");
+            MessageBox.Show("Atlas 面板已在运行（按 Ctrl+Alt+C 显示/隐藏）。", "Atlas for SAI2");
             Shutdown(0);
             return;
         }

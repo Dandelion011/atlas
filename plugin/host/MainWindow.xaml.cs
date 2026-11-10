@@ -8,7 +8,7 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using Microsoft.Web.WebView2.Core;
 
-namespace ColorWitch.Sai2;
+namespace Atlas.Sai2;
 
 public partial class MainWindow : Window
 {
@@ -29,10 +29,10 @@ public partial class MainWindow : Window
     private string? _webRoot;
     private string? _embedCss;
     private string? _embedJs;
-    private readonly bool _offscreen = Environment.GetEnvironmentVariable("CW_OFFSCREEN") == "1";
+    private readonly bool _offscreen = Environment.GetEnvironmentVariable("ATLAS_OFFSCREEN") == "1";
 
     private const int CompactWidth = 380;
-    private const string VirtualHost = "colorwitch.local";
+    private const string VirtualHost = "atlas.app";
 
     public MainWindow()
     {
@@ -65,7 +65,7 @@ public partial class MainWindow : Window
         {
             try
             {
-                var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ColorWitch.Sai2");
+                var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Atlas.Sai2");
                 Directory.CreateDirectory(dir);
                 return Path.Combine(dir, "settings.json");
             }
@@ -99,9 +99,9 @@ public partial class MainWindow : Window
         catch { }
         LayoutButton.Content = _wide ? "紧凑" : "完整";
         // 自动化/排障用的尺寸覆盖：不写配置，仅本次运行生效
-        if (int.TryParse(Environment.GetEnvironmentVariable("CW_PANEL_WIDTH"), out var forcedWidth))
+        if (int.TryParse(Environment.GetEnvironmentVariable("ATLAS_PANEL_WIDTH"), out var forcedWidth))
             _panelWidth = Math.Clamp(forcedWidth, CompactWidth, 1440);
-        if (Environment.GetEnvironmentVariable("CW_PANEL_WIDE") == "1")
+        if (Environment.GetEnvironmentVariable("ATLAS_PANEL_WIDE") == "1")
         {
             _wide = true;
             _panelWidth = Math.Max(_panelWidth, 1180);
@@ -176,9 +176,9 @@ public partial class MainWindow : Window
         if (index is null || css is null || js is null)
         {
             MessageBox.Show(
-                "找不到 ColorWitch 页面资源（index.html / embed.css / embed.js）。\n" +
-                "请把插件目录完整安装（index.html 与 embed.* 需和 ColorWitch.Sai2.exe 同级，或在仓库里直接运行）。",
-                "ColorWitch for SAI2", MessageBoxButton.OK, MessageBoxImage.Warning);
+                "找不到 Atlas 页面资源（index.html / embed.css / embed.js）。\n" +
+                "请把插件目录完整安装（index.html 与 embed.* 需和 Atlas.Sai2.exe 同级，或在仓库里直接运行）。",
+                "Atlas for SAI2", MessageBoxButton.OK, MessageBoxImage.Warning);
             return false;
         }
         _webRoot = Path.GetDirectoryName(index)!;
@@ -226,16 +226,16 @@ public partial class MainWindow : Window
     private static IEnumerable<string> CandidateUserDataFolders()
     {
         yield return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "ColorWitch.Sai2", "WebView2");
+            "Atlas.Sai2", "WebView2");
         yield return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "ColorWitch.Sai2", "WebView2");
+            "Atlas.Sai2", "WebView2");
         yield return Path.Combine(AppContext.BaseDirectory, "webview-data");
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         Log("start baseDir=" + AppContext.BaseDirectory);
-        if (Environment.GetEnvironmentVariable("CW_DEBUG") == "1")
+        if (Environment.GetEnvironmentVariable("ATLAS_DEBUG") == "1")
         {
             if (!LoadAssets())
             {
@@ -290,7 +290,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            MessageBox.Show("WebView2 初始化失败：" + ex.Message, "ColorWitch for SAI2");
+            MessageBox.Show("WebView2 初始化失败：" + ex.Message, "Atlas for SAI2");
             Application.Current.Shutdown(1);
             return;
         }
@@ -304,7 +304,7 @@ public partial class MainWindow : Window
     {
         try
         {
-            var path = Path.Combine(AppContext.BaseDirectory, "ColorWitch.Sai2.log");
+            var path = Path.Combine(AppContext.BaseDirectory, "Atlas.Sai2.log");
             File.AppendAllText(path, $"{DateTime.Now:HH:mm:ss.fff} {message}{Environment.NewLine}");
         }
         catch { }
@@ -322,18 +322,18 @@ public partial class MainWindow : Window
         var css = JsonSerializer.Serialize(_embedCss);
         var prelude =
             "(function(){try{" +
-            "window.__cwLog=function(m){try{window.chrome.webview.postMessage({type:'cw:log',text:String(m)})}catch(e){}};" +
-            "window.addEventListener('error',function(e){window.__cwLog('error: '+e.message+' @'+e.filename+':'+e.lineno)});" +
+            "window.__atlasLog=function(m){try{window.chrome.webview.postMessage({type:'atlas:log',text:String(m)})}catch(e){}};" +
+            "window.addEventListener('error',function(e){window.__atlasLog('error: '+e.message+' @'+e.filename+':'+e.lineno)});" +
             "var oe=console.error,ow=console.warn;" +
-            "console.error=function(){window.__cwLog('console.error: '+Array.prototype.join.call(arguments,' '));oe.apply(console,arguments)};" +
-            "console.warn=function(){window.__cwLog('console.warn: '+Array.prototype.join.call(arguments,' '));ow.apply(console,arguments)};" +
+            "console.error=function(){window.__atlasLog('console.error: '+Array.prototype.join.call(arguments,' '));oe.apply(console,arguments)};" +
+            "console.warn=function(){window.__atlasLog('console.warn: '+Array.prototype.join.call(arguments,' '));ow.apply(console,arguments)};" +
             "}catch(e){}})();";
         await Web.CoreWebView2.ExecuteScriptAsync(prelude);
         var script =
             "(function(){try{" +
-            "var s=document.createElement('style');s.id='cw-embed-style';s.textContent=" + css + ";" +
+            "var s=document.createElement('style');s.id='atlas-embed-style';s.textContent=" + css + ";" +
             "(document.head||document.documentElement).appendChild(s);" +
-            "}catch(e){window.__cwLog('embed css: '+e.message);}})();";
+            "}catch(e){window.__atlasLog('embed css: '+e.message);}})();";
         await Web.CoreWebView2.ExecuteScriptAsync(script);
         await Web.CoreWebView2.ExecuteScriptAsync(_embedJs);
         _webReady = true;
@@ -352,14 +352,14 @@ public partial class MainWindow : Window
                 "'hexIn','cOnWhite','cOnBlack','gradCard','gradTop','gradFold','gradBody','gradOn','gradSwap','gradA','gradB'," +
                 "'gradMode','hueDir','lightMode','gradBar','gradPick','gradInfo','deadzone','deadOn'," +
                 "'dzH0','dzH1','dzS0','dzS1','dzV0','dzV1','copyCss','copySvg','cardMod','cardTop','cardFold','cardBody','cardList','cardSave'," +
-                "'expCss','expJson','expGpl','expAse','helpDlg','cwBar','cwApply','cwRead','cwLive','cwAttach','cwStatus'];" +
+                "'expCss','expJson','expGpl','expAse','helpDlg','atlasBar','atlasApply','atlasRead','atlasLive','atlasAttach','atlasStatus'];" +
                 "var missing=[],hidden=[];" +
                 "for(var i=0;i<ids.length;i++){var el=document.getElementById(ids[i]);" +
                 "if(!el){missing.push(ids[i]);continue;}" +
                 "if(el.offsetParent===null&&el.getClientRects().length===0)hidden.push(ids[i]);}" +
-                "var ls=false;try{localStorage.setItem('cw-probe','1');ls=localStorage.getItem('cw-probe')==='1';localStorage.removeItem('cw-probe');}catch(e){}" +
+                "var ls=false;try{localStorage.setItem('atlas-probe','1');ls=localStorage.getItem('atlas-probe')==='1';localStorage.removeItem('atlas-probe');}catch(e){}" +
                 "var deck=document.getElementById('deck'),panel=document.getElementById('panel');" +
-                "return JSON.stringify({url:location.href,cls:document.documentElement.className,bar:!!document.getElementById('cwBar')," +
+                "return JSON.stringify({url:location.href,cls:document.documentElement.className,bar:!!document.getElementById('atlasBar')," +
                 "width:document.documentElement.clientWidth,height:document.documentElement.clientHeight," +
                 "missing:missing,hidden:hidden,missingCount:missing.length,hiddenCount:hidden.length," +
                 "canvas:document.querySelectorAll('canvas').length," +
@@ -377,31 +377,31 @@ public partial class MainWindow : Window
         }
 
         _ = SavePreviewAsync();
-        if (Environment.GetEnvironmentVariable("CW_SELFTEST") == "1")
+        if (Environment.GetEnvironmentVariable("ATLAS_SELFTEST") == "1")
             _ = RunSelfTestAsync();
     }
 
-    /// <summary>CW_SELFTEST=1: exercise the host ↔ panel bridge without touching SAI2.</summary>
+    /// <summary>ATLAS_SELFTEST=1: exercise the host ↔ panel bridge without touching SAI2.</summary>
     private async Task RunSelfTestAsync()
     {
         try
         {
             await Task.Delay(800);
             var r1 = await Web.CoreWebView2.ExecuteScriptAsync(
-                "window.__cwFromHost({type:'sai2:state',attached:true,visible:true,bridge:'ok'});" +
-                "window.__cwFromHost({type:'sai2:color',hex:'#3366CC'});" +
+                "window.__atlasFromHost({type:'sai2:state',attached:true,visible:true,bridge:'ok'});" +
+                "window.__atlasFromHost({type:'sai2:color',hex:'#3366CC'});" +
                 "JSON.stringify({cmdHex:document.getElementById('cmdHex').textContent," +
                 "hexIn:document.getElementById('hexIn').value," +
-                "attach:document.getElementById('cwAttach').textContent})");
+                "attach:document.getElementById('atlasAttach').textContent})");
             Log("selftest push " + r1);
 
             var r2 = await Web.CoreWebView2.ExecuteScriptAsync(
-                "document.getElementById('cwApply').click(); 'clicked'");
+                "document.getElementById('atlasApply').click(); 'clicked'");
             Log("selftest apply " + r2);
 
             await Task.Delay(700);
             var r3 = await Web.CoreWebView2.ExecuteScriptAsync(
-                "JSON.stringify({status:document.getElementById('cwStatus').title," +
+                "JSON.stringify({status:document.getElementById('atlasStatus').title," +
                 "cmdHex:document.getElementById('cmdHex').textContent})");
             Log("selftest after apply " + r3);
 
@@ -414,9 +414,9 @@ public partial class MainWindow : Window
                 await Web.CoreWebView2.ExecuteScriptAsync(
                     "(function(){try{" +
                     "var oc=HTMLAnchorElement.prototype.click;" +
-                    "HTMLAnchorElement.prototype.click=function(){window.__cwLog('anchor-click download='+(this.download||'')+' href='+String(this.href).slice(0,48));return oc.apply(this,arguments);};" +
-                    "document.addEventListener('click',function(e){window.__cwLog('click id='+(e.target&&e.target.id)+' trusted='+e.isTrusted);},true);" +
-                    "}catch(e){window.__cwLog('hook fail '+e.message)}})();");
+                    "HTMLAnchorElement.prototype.click=function(){window.__atlasLog('anchor-click download='+(this.download||'')+' href='+String(this.href).slice(0,48));return oc.apply(this,arguments);};" +
+                    "document.addEventListener('click',function(e){window.__atlasLog('click id='+(e.target&&e.target.id)+' trusted='+e.isTrusted);},true);" +
+                    "}catch(e){window.__atlasLog('hook fail '+e.message)}})();");
                 var posJson = await Web.CoreWebView2.ExecuteScriptAsync(
                     "(function(){var el=document.getElementById('shotBtn');if(!el)return '[]';" +
                     "var r=el.getBoundingClientRect();return JSON.stringify([r.left+r.width/2,r.top+r.height/2]);})()");
@@ -470,7 +470,7 @@ public partial class MainWindow : Window
 
     private async Task SavePreviewAsync()
     {
-        if (Environment.GetEnvironmentVariable("CW_DEBUG") != "1") return;
+        if (Environment.GetEnvironmentVariable("ATLAS_DEBUG") != "1") return;
         try
         {
             await Task.Delay(1500);
@@ -496,9 +496,9 @@ public partial class MainWindow : Window
                 return;
             }
             var bytes = Convert.FromBase64String(dataB64);
-            var fileName = string.IsNullOrWhiteSpace(name) ? "colorwitch-export" : Path.GetFileName(name);
+            var fileName = string.IsNullOrWhiteSpace(name) ? "atlas-export" : Path.GetFileName(name);
             string path;
-            if (_offscreen || Environment.GetEnvironmentVariable("CW_AUTOSAVE") == "1")
+            if (_offscreen || Environment.GetEnvironmentVariable("ATLAS_AUTOSAVE") == "1")
             {
                 var dir = Path.Combine(AppContext.BaseDirectory, "exports");
                 Directory.CreateDirectory(dir);
@@ -534,8 +534,8 @@ public partial class MainWindow : Window
         {
             Log("DownloadStarting path=" + e.ResultFilePath + " uri=" + (e.DownloadOperation?.Uri ?? ""));
             var name = Path.GetFileName(e.ResultFilePath);
-            if (string.IsNullOrWhiteSpace(name)) name = "colorwitch-export";
-            if (_offscreen || Environment.GetEnvironmentVariable("CW_AUTOSAVE") == "1")
+            if (string.IsNullOrWhiteSpace(name)) name = "atlas-export";
+            if (_offscreen || Environment.GetEnvironmentVariable("ATLAS_AUTOSAVE") == "1")
             {
                 var dir = Path.Combine(AppContext.BaseDirectory, "exports");
                 Directory.CreateDirectory(dir);
@@ -613,7 +613,7 @@ public partial class MainWindow : Window
     private void FollowSai2()
     {
         var dpi = VisualTreeHelper.GetDpi(this);
-        if (Environment.GetEnvironmentVariable("CW_DEBUG") == "1")
+        if (Environment.GetEnvironmentVariable("ATLAS_DEBUG") == "1")
             Log($"follow: panelWidth={_panelWidth} dpi={dpi.DpiScaleX:0.00} wide={_wide}");
         if (_sai2Hwnd == IntPtr.Zero || !Native.IsWindow(_sai2Hwnd)) return;
 
@@ -700,7 +700,7 @@ public partial class MainWindow : Window
         }
 
         var type = msg.TryGetProperty("type", out var t) ? t.GetString() : null;
-        if (type == "cw:log")
+        if (type == "atlas:log")
         {
             Log("js: " + (msg.TryGetProperty("text", out var lt) ? lt.GetString() : ""));
             return;
@@ -742,7 +742,7 @@ public partial class MainWindow : Window
                 break;
             case "app:resize":
                 if (msg.TryGetProperty("width", out var w) && w.TryGetInt32(out var width)
-                    && Environment.GetEnvironmentVariable("CW_DEBUG") == "1")
+                    && Environment.GetEnvironmentVariable("ATLAS_DEBUG") == "1")
                     Log("page width " + width);
                 break;
         }
@@ -753,7 +753,7 @@ public partial class MainWindow : Window
         if (!_webReady) return;
         var json = JsonSerializer.Serialize(payload);
         _ = Web.CoreWebView2.ExecuteScriptAsync(
-            "window.__cwFromHost&&window.__cwFromHost(" + json + ")");
+            "window.__atlasFromHost&&window.__atlasFromHost(" + json + ")");
     }
 
     private void PushState() => PostToJs(new

@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace ColorWitch.Sai2;
+namespace Atlas.Sai2;
 
 internal static class Native
 {

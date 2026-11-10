@@ -1,4 +1,4 @@
-<Application x:Class="ColorWitch.Sai2.App"
+<Application x:Class="Atlas.Sai2.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              ShutdownMode="OnMainWindowClose">

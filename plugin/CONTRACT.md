@@ -1,7 +1,7 @@
-# ColorWitch for SAI2 · 插件分支契约
+# Atlas for SAI2 · 插件分支契约
 
-分支：`feat/sai2-plugin`（来自 ColorWitch / Atlas 主仓库）
-目标：把 ColorWitch（三维色彩空间取色器）做成能在 PaintTool SAI Ver.2 里使用的插件面板，取到的颜色直接写进 SAI2 的前景色，SAI2 改色时面板跟随。
+分支：`feat/sai2-plugin`（来自 Atlas 主仓库）
+目标：把 Atlas（三维色彩空间取色器）做成能在 PaintTool SAI Ver.2 里使用的插件面板，取到的颜色直接写进 SAI2 的前景色，SAI2 改色时面板跟随。
 
 ## 参考实现（别人做的 SAI2「插件」）
 
@@ -11,14 +11,14 @@
 ## 组成
 
 ```
-ColorWitch/                        (git 分支 feat/sai2-plugin)
-├── index.html                     ColorWitch 原样保留，不做插件相关修改
+Atlas/                        (git 分支 feat/sai2-plugin)
+├── index.html                     Atlas 原样保留，不做插件相关修改
 ├── preview.png / README.md        原样
 └── plugin/
     ├── CONTRACT.md                本文件
     ├── embed.css                  嵌入模式的样式（注入到 index.html）
     ├── embed.js                   嵌入模式的补充脚本 + 桥接 JS
-    ├── host/                      C# WPF + WebView2 宿主（ColorWitch.Sai2.exe）
+    ├── host/                      C# WPF + WebView2 宿主（Atlas.Sai2.exe）
     ├── install/                   install.ps1 / uninstall.ps1 / 启动快捷方式
     └── docs/README.md             安装与使用说明
 ```
@@ -26,7 +26,7 @@ ColorWitch/                        (git 分支 feat/sai2-plugin)
 宿主启动后：
 1. 找到 SAI2 主窗口（`sflRootWindow`，进程 sai2.exe）。
 2. 把面板窗口贴到 SAI2 客户区右侧（跟随 SAI2 移动/缩放/最小化；可脱离成浮动窗口）。
-3. WebView2 用 **https 虚拟主机**（`https://colorwitch.local/` → 安装目录）载入 `index.html?embed=1`，
+3. WebView2 用 **https 虚拟主机**（`https://atlas.app/` → 安装目录）载入 `index.html?embed=1`，
    注入 `embed.css` + `embed.js`。用 https 虚拟主机是为了拿到安全上下文与稳定来源：
    剪贴板、`EyeDropper`、`localStorage` 都与普通网页一致。
 4. 双向颜色桥：读 SAI2 前景色、写 SAI2 前景色。
@@ -66,7 +66,7 @@ JS → 宿主：
 
 导出的 CSS / JSON / GPL / ASE / PNG 都由宿主弹出原生保存对话框（离屏/自动测试模式写到 exe 旁 `exports\`）。
 
-非 WebView2 环境（普通浏览器调试）时，`embed.js` 用 `window.__cwHostMock` 模拟，方便单独验证 UI。
+非 WebView2 环境（普通浏览器调试）时，`embed.js` 用 `window.__atlasHostMock` 模拟，方便单独验证 UI。
 
 ## 颜色桥（T1 产出）
 

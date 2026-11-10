@@ -1,33 +1,33 @@
 /* =========================================================================
-   ColorWitch · SAI2 插件面板 · 嵌入样式
+   Atlas · SAI2 插件面板 · 嵌入样式
    -------------------------------------------------------------------------
    只做三件事，原页面（index.html）的结构和功能一律不动：
-     1. 给页面底部留出 #cwBar 的高度，内容区按可用高度重新算；
-     2. 底部 #cwBar 的样式（纸面 + 细线 + 荧光蓝主按钮）；
+     1. 给页面底部留出 #atlasBar 的高度，内容区按可用高度重新算；
+     2. 底部 #atlasBar 的样式（纸面 + 细线 + 荧光蓝主按钮）；
      3. 窄宽度下不再隐藏「复制 / 链接」等按钮，命令栏允许换行。
 
-   所有规则都挂在 html.cw-embed 下；普通打开 index.html 完全不受影响。
+   所有规则都挂在 html.atlas-embed 下；普通打开 index.html 完全不受影响。
    页面自己的响应式断点（1180 / 940 / 760 / 560 / 400）继续生效，
    所以 380 宽是单列滚动、1180 宽是原始三栏，两种宽度下功能都齐全。
    ========================================================================= */
 
 :root {
-  --cw-bar-h: 46px;
-  --cw-cmd-h: 46px;
+  --atlas-bar-h: 46px;
+  --atlas-cmd-h: 46px;
 }
 
-html.cw-embed,
-html.cw-embed body {
+html.atlas-embed,
+html.atlas-embed body {
   height: 100%;
 }
 
-html.cw-embed body {
+html.atlas-embed body {
   overflow: hidden;
   padding-bottom: 0;
 }
 
 /* 命令栏在窄宽度下允许换行（原页面 <560 会藏掉复制/链接，这里保留全部按钮） */
-html.cw-embed .cmd {
+html.atlas-embed .cmd {
   height: auto;
   min-height: 46px;
   flex-wrap: wrap;
@@ -35,29 +35,29 @@ html.cw-embed .cmd {
   row-gap: 4px;
 }
 
-html.cw-embed #copyBtn,
-html.cw-embed #linkBtn {
+html.atlas-embed #copyBtn,
+html.atlas-embed #linkBtn {
   display: inline-flex !important;
 }
 
 /* 内容区高度 = 视口 - 命令栏 - 底部操作条（三条规则按页面各自的布局分别生效） */
-html.cw-embed #deck {
-  height: calc(100dvh - var(--cw-cmd-h) - var(--cw-bar-h)) !important;
+html.atlas-embed #deck {
+  height: calc(100dvh - var(--atlas-cmd-h) - var(--atlas-bar-h)) !important;
   min-height: 0;
 }
 
-html.cw-embed #stage {
+html.atlas-embed #stage {
   min-height: 0;
 }
 
 /* ---------- 底部操作条 ---------- */
 
-#cwBar {
+#atlasBar {
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
-  height: var(--cw-bar-h);
+  height: var(--atlas-bar-h);
   display: flex;
   align-items: center;
   gap: 10px;
@@ -70,12 +70,12 @@ html.cw-embed #stage {
   user-select: none;
 }
 
-#cwBar .cw-spacer {
+#atlasBar .atlas-spacer {
   flex: 1 1 auto;
   min-width: 4px;
 }
 
-#cwBar .cw-apply {
+#atlasBar .atlas-apply {
   appearance: none;
   border: 0;
   padding: 0 16px;
@@ -91,14 +91,14 @@ html.cw-embed #stage {
   white-space: nowrap;
 }
 
-#cwBar .cw-apply:hover { background: #2b5cff; }
-#cwBar .cw-apply:active { background: #1740d6; }
-#cwBar .cw-apply.cw-ack {
+#atlasBar .atlas-apply:hover { background: #2b5cff; }
+#atlasBar .atlas-apply:active { background: #1740d6; }
+#atlasBar .atlas-apply.atlas-ack {
   background: var(--ink);
   color: var(--paper);
 }
 
-#cwBar .cw-btn {
+#atlasBar .atlas-btn {
   appearance: none;
   border: 1px solid var(--line2);
   background: var(--board);
@@ -113,10 +113,10 @@ html.cw-embed #stage {
   transition: border-color var(--fast) var(--ease), background var(--fast) var(--ease);
 }
 
-#cwBar .cw-btn:hover { border-color: var(--ink); }
-#cwBar .cw-btn:active { background: var(--chip); }
+#atlasBar .atlas-btn:hover { border-color: var(--ink); }
+#atlasBar .atlas-btn:active { background: var(--chip); }
 
-#cwBar .cw-live {
+#atlasBar .atlas-live {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -126,20 +126,20 @@ html.cw-embed #stage {
   white-space: nowrap;
 }
 
-#cwBar .cw-live input {
+#atlasBar .atlas-live input {
   width: 13px;
   height: 13px;
   margin: 0;
   accent-color: var(--signal);
 }
 
-#cwBar .cw-tail {
+#atlasBar .atlas-tail {
   display: inline-flex;
   align-items: center;
   gap: 8px;
 }
 
-#cwBar .cw-status {
+#atlasBar .atlas-status {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -147,7 +147,7 @@ html.cw-embed #stage {
   height: 14px;
 }
 
-#cwBar .cw-status i {
+#atlasBar .atlas-status i {
   width: 6px;
   height: 6px;
   border-radius: 50%;
@@ -155,38 +155,38 @@ html.cw-embed #stage {
   display: block;
 }
 
-#cwBar .cw-status.ok i { background: var(--signal); }
-#cwBar .cw-status.err i { background: var(--danger); }
-#cwBar .cw-status.na i { background: var(--line2); }
+#atlasBar .atlas-status.ok i { background: var(--signal); }
+#atlasBar .atlas-status.err i { background: var(--danger); }
+#atlasBar .atlas-status.na i { background: var(--line2); }
 
 /* ---------- 窄宽度：命令栏与操作条收紧 ---------- */
 
 @media (max-width: 560px) {
-  #cwBar {
+  #atlasBar {
     gap: 6px;
     padding: 0 8px;
   }
-  #cwBar .cw-apply {
+  #atlasBar .atlas-apply {
     padding: 0 10px;
     font-size: 10.5px;
   }
-  #cwBar .cw-btn {
+  #atlasBar .atlas-btn {
     padding: 0 7px;
     font-size: 10px;
   }
-  #cwBar .cw-live {
+  #atlasBar .atlas-live {
     gap: 4px;
   }
 }
 
 @media (max-width: 360px) {
-  #cwBar .cw-live span {
+  #atlasBar .atlas-live span {
     display: none;
   }
 }
 
 @media (max-width: 380px) {
-  #cwBar .cw-btn.cw-attach {
+  #atlasBar .atlas-btn.atlas-attach {
     padding: 0 6px;
   }
 }
