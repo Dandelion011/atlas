@@ -8,7 +8,7 @@
         ShowActivated="False" Focusable="True"
         Background="#F4F4F2" UseLayoutRounding="True"
         SnapsToDevicePixels="True" Topmost="False">
-    <Grid>
+    <Grid x:Name="RootGrid">
         <Grid.RowDefinitions>
             <RowDefinition Height="26"/>
             <RowDefinition Height="*"/>

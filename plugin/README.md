@@ -6,11 +6,22 @@
 
 ![面板预览](docs/panel-preview.png)
 
-## 安装
+## 便携版（推荐给普通用户）
+
+从 [Releases](https://github.com/Dandelion011/atlas/releases) 下载 `Atlas-for-SAI2-v*-win-x64.zip`，解压后**双击 `Atlas.Sai2.exe`** 就能用：
+
+- 自带 .NET 运行时，不需要安装 .NET、不需要管理员权限；
+- 页面资源（index.html / embed.css / embed.js）已打进 exe，第一次运行会解包到 `%LOCALAPPDATA%\Atlas.Sai2\web`；
+- 不写注册表、不改 SAI2 目录；只有 WebView2 缓存和窗口宽度记在 `%LOCALAPPDATA%\Atlas.Sai2`；
+- 仍然需要系统里有 **WebView2 Runtime**（Win11 自带，Win10 装过 Edge 一般也有）。
+
+只想用便携版的话看完这一节就够了；下面是源码构建 / 装进 SAI2 目录的玩法。
+
+## 安装（装进 SAI2 目录）
 
 要求：
 - Windows 10 / 11 x64
-- **.NET 10 Desktop Runtime**（开发机装 SDK 就自带）
+- **.NET 10 Desktop Runtime**（用便携版则不需要）
 - **WebView2 Runtime**（Win11 自带；Win10 一般随 Edge 安装）
 - 目标 SAI2：`PaintTool SAI Ver.2 (64bit) Alpha.2026.10.19`（PivInk 汉化版，exe sha256 `FF227172…A15F`）。其它版本可以打开面板、读取当前色，但**写色会拒绝**并给出提示。
 
@@ -79,6 +90,7 @@ plugin/
 │   └── Native.cs         Win32 封装
 ├── embed.css / embed.js  注入 index.html 的面板布局与宿主桥
 ├── build.ps1             构建 → plugin/dist
+├── build-portable.ps1    便携版（自包含 exe，页面资源内嵌）→ plugin/portable/*.zip
 ├── install/              安装 / 卸载脚本
 └── docs/                 PANEL.md（嵌入实现）、BRIDGE.md（颜色桥）
 ```

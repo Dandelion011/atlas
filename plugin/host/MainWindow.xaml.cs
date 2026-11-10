@@ -3,10 +3,12 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
 using Microsoft.Web.WebView2.Core;
+using Microsoft.Web.WebView2.Wpf;
 
 namespace Atlas.Sai2;
 
@@ -173,21 +175,69 @@ public partial class MainWindow : Window
         var index = FindUpwards("index.html");
         var css = FindUpwards("embed.css");
         var js = FindUpwards("embed.js");
-        if (index is null || css is null || js is null)
+        if (index is not null && css is not null && js is not null)
+        {
+            _webRoot = Path.GetDirectoryName(index)!;
+            // 用 https 虚拟主机加载（而不是 file://）：拿到安全上下文与稳定来源，
+            // 剪贴板 / EyeDropper / localStorage 的行为和普通网页一致。
+            _pageUrl = $"https://{VirtualHost}/index.html";
+            _embedCss = File.ReadAllText(css);
+            _embedJs = File.ReadAllText(js);
+            return true;
+        }
+
+        // 便携版：页面资源嵌在 exe 里，运行时解包到用户目录再加载
+        try
+        {
+            var root = EmbeddedWebRoot();
+            var indexOut = Path.Combine(root, "index.html");
+            ExtractEmbedded("Atlas.index.html", indexOut);
+            ExtractEmbedded("Atlas.embed.css", Path.Combine(root, "embed.css"));
+            ExtractEmbedded("Atlas.embed.js", Path.Combine(root, "embed.js"));
+            _webRoot = root;
+            _embedCss = File.ReadAllText(Path.Combine(root, "embed.css"));
+            _embedJs = File.ReadAllText(Path.Combine(root, "embed.js"));
+            _pageUrl = $"https://{VirtualHost}/index.html";
+            Log("assets: embedded -> " + root);
+            return true;
+        }
+        catch (Exception ex)
         {
             MessageBox.Show(
-                "找不到 Atlas 页面资源（index.html / embed.css / embed.js）。\n" +
-                "请把插件目录完整安装（index.html 与 embed.* 需和 Atlas.Sai2.exe 同级，或在仓库里直接运行）。",
+                "找不到 Atlas 页面资源，也无法解包内置资源：" + ex.Message,
                 "Atlas for SAI2", MessageBoxButton.OK, MessageBoxImage.Warning);
             return false;
         }
-        _webRoot = Path.GetDirectoryName(index)!;
-        // 用 https 虚拟主机加载（而不是 file://）：拿到安全上下文与稳定来源，
-        // 剪贴板 / EyeDropper / localStorage 的行为和普通网页一致。
-        _pageUrl = $"https://{VirtualHost}/index.html";
-        _embedCss = File.ReadAllText(css);
-        _embedJs = File.ReadAllText(js);
-        return true;
+    }
+
+    private static string EmbeddedWebRoot()
+    {
+        var candidates = new[]
+        {
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Atlas.Sai2", "web"),
+            Path.Combine(AppContext.BaseDirectory, "web"),
+        };
+        foreach (var dir in candidates)
+        {
+            try
+            {
+                Directory.CreateDirectory(dir);
+                return dir;
+            }
+            catch (Exception ex)
+            {
+                Log("web asset dir failed at " + dir + ": " + ex.Message);
+            }
+        }
+        throw new InvalidOperationException("没有可写的目录用来解包页面资源");
+    }
+
+    private static void ExtractEmbedded(string name, string destination)
+    {
+        using var source = typeof(MainWindow).Assembly.GetManifestResourceStream(name)
+            ?? throw new InvalidOperationException("exe 内缺少资源 " + name);
+        using var target = File.Create(destination);
+        source.CopyTo(target);
     }
 
     // ---------- window plumbing ----------
@@ -232,6 +282,46 @@ public partial class MainWindow : Window
         yield return Path.Combine(AppContext.BaseDirectory, "webview-data");
     }
 
+    /// <summary>
+    /// 依次尝试 WebView2 用户数据目录；某个目录被残留进程占住（0x800700AA）时
+    /// 换下一个目录并重建 WebView2 控件，而不是直接报错退出。
+    /// </summary>
+    private async Task<bool> TryInitWebViewAsync()
+    {
+        foreach (var userData in CandidateUserDataFolders())
+        {
+            try
+            {
+                Directory.CreateDirectory(userData);
+                var env = await CoreWebView2Environment.CreateAsync(null, userData);
+                var web = new WebView2
+                {
+                    DefaultBackgroundColor = System.Drawing.Color.FromArgb(0xF4, 0xF4, 0xF2),
+                };
+                Grid.SetRow(web, 1);
+                if (Web is not null)
+                {
+                    try
+                    {
+                        RootGrid.Children.Remove(Web);
+                        Web.Dispose();
+                    }
+                    catch { }
+                }
+                RootGrid.Children.Add(web);
+                Web = web;
+                await web.EnsureCoreWebView2Async(env);
+                Log("webview2 ready, user data: " + userData);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log("webview2 init failed at " + userData + ": " + ex.Message);
+            }
+        }
+        return false;
+    }
+
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         Log("start baseDir=" + AppContext.BaseDirectory);
@@ -250,30 +340,15 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (!await TryInitWebViewAsync())
+        {
+            MessageBox.Show("WebView2 初始化失败：没有可用的用户数据目录。", "Atlas for SAI2");
+            Application.Current.Shutdown(1);
+            return;
+        }
+
         try
         {
-            CoreWebView2Environment? env = null;
-            Exception? lastError = null;
-            foreach (var userData in CandidateUserDataFolders())
-            {
-                try
-                {
-                    Directory.CreateDirectory(userData);
-                    env = await CoreWebView2Environment.CreateAsync(null, userData);
-                    Log("webview2 user data: " + userData);
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    lastError = ex;
-                    Log("webview2 init failed at " + userData + ": " + ex.Message);
-                }
-            }
-            if (env is null)
-                throw lastError ?? new InvalidOperationException("no user data folder");
-
-            await Web.EnsureCoreWebView2Async(env);
-            Log("core ready");
             Web.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
             Web.CoreWebView2.Settings.IsStatusBarEnabled = false;
             Web.CoreWebView2.Settings.AreDevToolsEnabled = true;
@@ -300,8 +375,11 @@ public partial class MainWindow : Window
         Tick();
     }
 
+    private static readonly bool DebugLog = Environment.GetEnvironmentVariable("ATLAS_DEBUG") == "1";
+
     private static void Log(string message)
     {
+        if (!DebugLog) return;
         try
         {
             var path = Path.Combine(AppContext.BaseDirectory, "Atlas.Sai2.log");
@@ -613,8 +691,6 @@ public partial class MainWindow : Window
     private void FollowSai2()
     {
         var dpi = VisualTreeHelper.GetDpi(this);
-        if (Environment.GetEnvironmentVariable("ATLAS_DEBUG") == "1")
-            Log($"follow: panelWidth={_panelWidth} dpi={dpi.DpiScaleX:0.00} wide={_wide}");
         if (_sai2Hwnd == IntPtr.Zero || !Native.IsWindow(_sai2Hwnd)) return;
 
         if (!Native.IsWindowVisible(_sai2Hwnd) || Native.IsIconic(_sai2Hwnd))

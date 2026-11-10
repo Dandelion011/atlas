@@ -10,13 +10,20 @@
     <RootNamespace>Atlas.Sai2</RootNamespace>
     <Product>Atlas for SAI2</Product>
     <Description>Atlas 三维取色面板 · PaintTool SAI Ver.2 插件</Description>
-    <Version>0.1.0</Version>
-    <FileVersion>0.1.0.0</FileVersion>
+    <Version>1.0.0</Version>
+    <FileVersion>1.0.0.0</FileVersion>
     <Company>Atlas</Company>
     <Copyright>MIT</Copyright>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 便携版把页面资源打进 exe：单文件双击就能用，不依赖旁边的 index.html -->
+    <EmbeddedResource Include="..\..\index.html" LogicalName="Atlas.index.html" />
+    <EmbeddedResource Include="..\embed.css" LogicalName="Atlas.embed.css" />
+    <EmbeddedResource Include="..\embed.js" LogicalName="Atlas.embed.js" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4314.35" />

@@ -11,3 +11,7 @@ plugin/host/bin/
 plugin/host/obj/
 plugin/dist/
 plugin/webview-data/
+
+# 便携版打包产物（只保留 portable/README-portable.txt 和 build-portable.ps1）
+plugin/portable/Atlas-for-SAI2-*/
+plugin/portable/*.zip
