@@ -22,6 +22,7 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="ColorWitch"
                            FontSize="11" FontWeight="SemiBold" Foreground="#161616"
@@ -31,11 +32,15 @@
                     <TextBlock x:Name="StatusText" Text="SAI2" FontSize="9.5" Foreground="#5C5C5C"
                                Margin="5,0,0,0" VerticalAlignment="Center" FontFamily="Segoe UI"/>
                 </StackPanel>
-                <Button x:Name="AttachButton" Grid.Column="2" Content="浮动" FontSize="10"
+                <Button x:Name="LayoutButton" Grid.Column="2" Content="完整" FontSize="10"
+                        Padding="6,1" Margin="0,0,4,0" MinWidth="34"
+                        Background="Transparent" BorderBrush="#D9D9D6" Foreground="#161616"
+                        Click="LayoutButton_Click" ToolTip="切换完整界面（1180 宽，三栏）/ 紧凑面板（380 宽）"/>
+                <Button x:Name="AttachButton" Grid.Column="3" Content="浮动" FontSize="10"
                         Padding="6,1" Margin="0,0,4,0" MinWidth="34"
                         Background="Transparent" BorderBrush="#D9D9D6" Foreground="#161616"
                         Click="AttachButton_Click" ToolTip="贴靠 SAI2 / 独立浮动"/>
-                <Button x:Name="CloseButton" Grid.Column="3" Content="×" FontSize="13"
+                <Button x:Name="CloseButton" Grid.Column="4" Content="×" FontSize="13"
                         Padding="6,0" MinWidth="24" Background="Transparent" BorderThickness="0"
                         Foreground="#5C5C5C" Click="CloseButton_Click" ToolTip="关闭面板"/>
             </Grid>

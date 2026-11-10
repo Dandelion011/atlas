@@ -24,10 +24,15 @@ public partial class MainWindow : Window
     private bool _webReady;
     private bool _attached = true;
     private int _panelWidth = 380;
+    private bool _wide;
     private string? _pageUrl;
+    private string? _webRoot;
     private string? _embedCss;
     private string? _embedJs;
     private readonly bool _offscreen = Environment.GetEnvironmentVariable("CW_OFFSCREEN") == "1";
+
+    private const int CompactWidth = 380;
+    private const string VirtualHost = "colorwitch.local";
 
     public MainWindow()
     {
@@ -36,6 +41,7 @@ public partial class MainWindow : Window
         SourceInitialized += OnSourceInitialized;
         Loaded += OnLoaded;
         Closed += OnClosed;
+        LoadSettings();
         if (_offscreen)
         {
             WindowStartupLocation = WindowStartupLocation.Manual;
@@ -49,6 +55,101 @@ public partial class MainWindow : Window
             Left = Math.Max(area.Left + 16, area.Right - Width - 16);
             Top = area.Top + 48;
         }
+    }
+
+    // ---------- settings ----------
+
+    private static string SettingsPath
+    {
+        get
+        {
+            try
+            {
+                var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ColorWitch.Sai2");
+                Directory.CreateDirectory(dir);
+                return Path.Combine(dir, "settings.json");
+            }
+            catch
+            {
+                return Path.Combine(AppContext.BaseDirectory, "settings.json");
+            }
+        }
+    }
+
+    private sealed class HostSettings
+    {
+        public int Width { get; set; } = CompactWidth;
+        public bool Wide { get; set; }
+    }
+
+    private void LoadSettings()
+    {
+        try
+        {
+            if (File.Exists(SettingsPath))
+            {
+                var s = JsonSerializer.Deserialize<HostSettings>(File.ReadAllText(SettingsPath));
+                if (s is not null)
+                {
+                    _wide = s.Wide;
+                    _panelWidth = Math.Clamp(s.Width <= 0 ? CompactWidth : s.Width, CompactWidth, 1440);
+                }
+            }
+        }
+        catch { }
+        LayoutButton.Content = _wide ? "紧凑" : "完整";
+        // 自动化/排障用的尺寸覆盖：不写配置，仅本次运行生效
+        if (int.TryParse(Environment.GetEnvironmentVariable("CW_PANEL_WIDTH"), out var forcedWidth))
+            _panelWidth = Math.Clamp(forcedWidth, CompactWidth, 1440);
+        if (Environment.GetEnvironmentVariable("CW_PANEL_WIDE") == "1")
+        {
+            _wide = true;
+            _panelWidth = Math.Max(_panelWidth, 1180);
+            LayoutButton.Content = "紧凑";
+        }
+        if (_wide && _panelWidth < 900) _panelWidth = WideWidth();
+        Width = _panelWidth;
+    }
+
+    private void SaveSettings()
+    {
+        try
+        {
+            File.WriteAllText(SettingsPath, JsonSerializer.Serialize(new HostSettings { Width = _panelWidth, Wide = _wide }));
+        }
+        catch { }
+    }
+
+    private int WideWidth()
+    {
+        var target = _attached && _sai2Hwnd != IntPtr.Zero ? Sai2ClientWidthDip() : SystemParameters.WorkArea.Width;
+        var w = (int)Math.Round(target) - 40;
+        return Math.Clamp(w, 900, 1440);
+    }
+
+    private double Sai2ClientWidthDip()
+    {
+        if (_sai2Hwnd == IntPtr.Zero || !Native.IsWindow(_sai2Hwnd)) return SystemParameters.WorkArea.Width;
+        Native.GetClientRect(_sai2Hwnd, out var client);
+        var dpi = VisualTreeHelper.GetDpi(this);
+        return client.Right / dpi.DpiScaleX;
+    }
+
+    private void LayoutButton_Click(object sender, RoutedEventArgs e)
+    {
+        _wide = !_wide;
+        _panelWidth = _wide ? WideWidth() : CompactWidth;
+        LayoutButton.Content = _wide ? "紧凑" : "完整";
+        if (_attached && _sai2Hwnd != IntPtr.Zero)
+        {
+            FollowSai2();
+        }
+        else
+        {
+            Width = _panelWidth;
+            Height = Math.Min(900, SystemParameters.WorkArea.Height - 80);
+        }
+        SaveSettings();
     }
 
     // ---------- assets ----------
@@ -80,7 +181,10 @@ public partial class MainWindow : Window
                 "ColorWitch for SAI2", MessageBoxButton.OK, MessageBoxImage.Warning);
             return false;
         }
-        _pageUrl = new Uri(index).AbsoluteUri;
+        _webRoot = Path.GetDirectoryName(index)!;
+        // 用 https 虚拟主机加载（而不是 file://）：拿到安全上下文与稳定来源，
+        // 剪贴板 / EyeDropper / localStorage 的行为和普通网页一致。
+        _pageUrl = $"https://{VirtualHost}/index.html";
         _embedCss = File.ReadAllText(css);
         _embedJs = File.ReadAllText(js);
         return true;
@@ -169,12 +273,20 @@ public partial class MainWindow : Window
                 throw lastError ?? new InvalidOperationException("no user data folder");
 
             await Web.EnsureCoreWebView2Async(env);
+            Log("core ready");
             Web.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
             Web.CoreWebView2.Settings.IsStatusBarEnabled = false;
             Web.CoreWebView2.Settings.AreDevToolsEnabled = true;
             Web.CoreWebView2.WebMessageReceived += OnWebMessage;
             Web.CoreWebView2.NavigationCompleted += OnNavigationCompleted;
+            Web.CoreWebView2.DownloadStarting += OnDownloadStarting;
+            if (_webRoot is not null)
+            {
+                Web.CoreWebView2.SetVirtualHostNameToFolderMapping(VirtualHost, _webRoot, CoreWebView2HostResourceAccessKind.Allow);
+                Log("virtual host mapped: " + VirtualHost + " -> " + _webRoot);
+            }
             Web.CoreWebView2.Navigate(_pageUrl + "?embed=1");
+            Log("navigate " + _pageUrl);
         }
         catch (Exception ex)
         {
@@ -231,15 +343,32 @@ public partial class MainWindow : Window
         try
         {
             var probe = await Web.CoreWebView2.ExecuteScriptAsync(
-                "JSON.stringify({" +
-                "cls:document.documentElement.className," +
-                "style:!!document.getElementById('cw-embed-style')," +
-                "bar:!!document.getElementById('cwBar')," +
-                "ids:['deck','panel','cmdHex','hexIn','swatch','histRow'].map(function(i){return i+':'+!!document.getElementById(i)}).join(',')," +
-                "title:document.title," +
-                "text:(document.body?document.body.innerText.length:-1)," +
+                "(function(){" +
+                "var ids=['spHsv','spHvs','spOk','cmdHex','pickBtn','copyBtn','linkBtn','helpBtn'," +
+                "'rail','cvV','cvL','capV','capL','stage','gl','path','hud','viewDefault','viewTop','viewSide','gridBtn','shotBtn'," +
+                "'panel','swatch','swHex','swGray','swGrayHex','chips','palHint','gradCurBtn','saveBtn','histRow'," +
+                "'hRange','hNum','sRange','sNum','vRange','vNum','yNum','gNum','isoLum','isoGray'," +
+                "'rOut','gOut','bOut','hOut','sOut','vOut','kOut','mOut','yOut','kkOut','okLOut','okCOut','okHOut'," +
+                "'hexIn','cOnWhite','cOnBlack','gradCard','gradTop','gradFold','gradBody','gradOn','gradSwap','gradA','gradB'," +
+                "'gradMode','hueDir','lightMode','gradBar','gradPick','gradInfo','deadzone','deadOn'," +
+                "'dzH0','dzH1','dzS0','dzS1','dzV0','dzV1','copyCss','copySvg','cardMod','cardTop','cardFold','cardBody','cardList','cardSave'," +
+                "'expCss','expJson','expGpl','expAse','helpDlg','cwBar','cwApply','cwRead','cwLive','cwAttach','cwStatus'];" +
+                "var missing=[],hidden=[];" +
+                "for(var i=0;i<ids.length;i++){var el=document.getElementById(ids[i]);" +
+                "if(!el){missing.push(ids[i]);continue;}" +
+                "if(el.offsetParent===null&&el.getClientRects().length===0)hidden.push(ids[i]);}" +
+                "var ls=false;try{localStorage.setItem('cw-probe','1');ls=localStorage.getItem('cw-probe')==='1';localStorage.removeItem('cw-probe');}catch(e){}" +
+                "var deck=document.getElementById('deck'),panel=document.getElementById('panel');" +
+                "return JSON.stringify({url:location.href,cls:document.documentElement.className,bar:!!document.getElementById('cwBar')," +
+                "width:document.documentElement.clientWidth,height:document.documentElement.clientHeight," +
+                "missing:missing,hidden:hidden,missingCount:missing.length,hiddenCount:hidden.length," +
                 "canvas:document.querySelectorAll('canvas').length," +
-                "url:location.href})");
+                "localStorage:ls,eyeDropper:typeof EyeDropper,clipboard:!!(navigator.clipboard&&navigator.clipboard.writeText)," +
+                "webgl:!!document.createElement('canvas').getContext('webgl')," +
+                "deckH:deck?deck.clientHeight:-1,deckScroll:deck?deck.scrollHeight:-1," +
+                "panelScroll:panel?panel.scrollHeight:-1," +
+                "hScroll:document.documentElement.scrollWidth>document.documentElement.clientWidth});" +
+                "})()");
             Log("probe " + probe);
         }
         catch (Exception ex)
@@ -275,6 +404,45 @@ public partial class MainWindow : Window
                 "JSON.stringify({status:document.getElementById('cwStatus').title," +
                 "cmdHex:document.getElementById('cmdHex').textContent})");
             Log("selftest after apply " + r3);
+
+            string r4;
+            try
+            {
+                // 用 CDP 发一次真实鼠标点击（保存图片按钮走页面自己的 Blob 下载），
+                // 普通 ExecuteScript 没有用户手势，浏览器会拦下载。
+                // 记录点击与 anchor 下载，确认页面自己走到了下载分支
+                await Web.CoreWebView2.ExecuteScriptAsync(
+                    "(function(){try{" +
+                    "var oc=HTMLAnchorElement.prototype.click;" +
+                    "HTMLAnchorElement.prototype.click=function(){window.__cwLog('anchor-click download='+(this.download||'')+' href='+String(this.href).slice(0,48));return oc.apply(this,arguments);};" +
+                    "document.addEventListener('click',function(e){window.__cwLog('click id='+(e.target&&e.target.id)+' trusted='+e.isTrusted);},true);" +
+                    "}catch(e){window.__cwLog('hook fail '+e.message)}})();");
+                var posJson = await Web.CoreWebView2.ExecuteScriptAsync(
+                    "(function(){var el=document.getElementById('shotBtn');if(!el)return '[]';" +
+                    "var r=el.getBoundingClientRect();return JSON.stringify([r.left+r.width/2,r.top+r.height/2]);})()");
+                var posText = JsonSerializer.Deserialize<string>(posJson) ?? "[]";
+                var pos = JsonSerializer.Deserialize<double[]>(posText) ?? Array.Empty<double>();
+                if (pos.Length == 2)
+                {
+                    var click = JsonSerializer.Serialize(new { type = "mousePressed", x = pos[0], y = pos[1], button = "left", clickCount = 1 });
+                    await Web.CoreWebView2.CallDevToolsProtocolMethodAsync("Input.dispatchMouseEvent", click);
+                    var up = JsonSerializer.Serialize(new { type = "mouseReleased", x = pos[0], y = pos[1], button = "left", clickCount = 1 });
+                    r4 = await Web.CoreWebView2.CallDevToolsProtocolMethodAsync("Input.dispatchMouseEvent", up);
+                }
+                else
+                {
+                    r4 = "shotBtn not found";
+                }
+            }
+            catch (Exception ex)
+            {
+                r4 = "cdp failed: " + ex.Message;
+            }
+            Log("selftest download " + r4);
+            await Task.Delay(1800);
+            var auto = Path.Combine(AppContext.BaseDirectory, "exports");
+            var files = Directory.Exists(auto) ? string.Join(",", Directory.GetFiles(auto).Select(Path.GetFileName)) : "";
+            Log("selftest downloads=" + files);
 
             await Task.Delay(300);
             PayloadCapture();
@@ -317,8 +485,93 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>页面导出由 embed.js 拦截后发来 app:save，这里负责选路径并落盘。</summary>
+    private void SaveExport(string? name, string? mime, string? dataB64)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(dataB64))
+            {
+                Log("export: empty payload");
+                return;
+            }
+            var bytes = Convert.FromBase64String(dataB64);
+            var fileName = string.IsNullOrWhiteSpace(name) ? "colorwitch-export" : Path.GetFileName(name);
+            string path;
+            if (_offscreen || Environment.GetEnvironmentVariable("CW_AUTOSAVE") == "1")
+            {
+                var dir = Path.Combine(AppContext.BaseDirectory, "exports");
+                Directory.CreateDirectory(dir);
+                path = Path.Combine(dir, fileName);
+            }
+            else
+            {
+                var dlg = new Microsoft.Win32.SaveFileDialog
+                {
+                    Title = "保存导出文件",
+                    FileName = fileName,
+                    Filter = "所有文件|*.*",
+                    AddExtension = false,
+                };
+                if (dlg.ShowDialog(this) != true) return;
+                path = dlg.FileName;
+            }
+            File.WriteAllBytes(path, bytes);
+            Log($"export saved {path} ({bytes.Length} bytes, {mime})");
+            PostToJs(new { type = "save:ack", ok = true });
+        }
+        catch (Exception ex)
+        {
+            Log("export failed: " + ex.Message);
+            PostToJs(new { type = "save:ack", ok = false });
+        }
+    }
+
+    /// <summary>页面里的导出（CSS/GPL/ASE/JSON、保存图片）走 Blob 下载，这里接管保存位置。</summary>
+    private void OnDownloadStarting(object? sender, CoreWebView2DownloadStartingEventArgs e)
+    {
+        try
+        {
+            Log("DownloadStarting path=" + e.ResultFilePath + " uri=" + (e.DownloadOperation?.Uri ?? ""));
+            var name = Path.GetFileName(e.ResultFilePath);
+            if (string.IsNullOrWhiteSpace(name)) name = "colorwitch-export";
+            if (_offscreen || Environment.GetEnvironmentVariable("CW_AUTOSAVE") == "1")
+            {
+                var dir = Path.Combine(AppContext.BaseDirectory, "exports");
+                Directory.CreateDirectory(dir);
+                e.ResultFilePath = Path.Combine(dir, name);
+                e.Handled = true;
+                Log("download -> " + e.ResultFilePath);
+                return;
+            }
+
+            var dlg = new Microsoft.Win32.SaveFileDialog
+            {
+                Title = "保存导出文件",
+                FileName = name,
+                Filter = "所有文件|*.*",
+                AddExtension = false,
+            };
+            if (dlg.ShowDialog(this) == true)
+            {
+                e.ResultFilePath = dlg.FileName;
+                e.Handled = true;
+            }
+            else
+            {
+                e.Cancel = true;
+                e.Handled = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log("download dialog failed: " + ex.Message);
+        }
+    }
+
     private void OnClosed(object? sender, EventArgs e)
     {
+        SaveSettings();
         _timer.Stop();
         Native.UnregisterHotKey(_hwnd, HotkeyId);
         if (_hook != IntPtr.Zero) Native.UnhookWinEvent(_hook);
@@ -359,6 +612,9 @@ public partial class MainWindow : Window
 
     private void FollowSai2()
     {
+        var dpi = VisualTreeHelper.GetDpi(this);
+        if (Environment.GetEnvironmentVariable("CW_DEBUG") == "1")
+            Log($"follow: panelWidth={_panelWidth} dpi={dpi.DpiScaleX:0.00} wide={_wide}");
         if (_sai2Hwnd == IntPtr.Zero || !Native.IsWindow(_sai2Hwnd)) return;
 
         if (!Native.IsWindowVisible(_sai2Hwnd) || Native.IsIconic(_sai2Hwnd))
@@ -374,7 +630,6 @@ public partial class MainWindow : Window
         var origin = new Native.POINT { X = 0, Y = 0 };
         Native.ClientToScreen(_sai2Hwnd, ref origin);
 
-        var dpi = VisualTreeHelper.GetDpi(this);
         int widthPx = (int)Math.Round(_panelWidth * dpi.DpiScaleX);
         int heightPx = (int)Math.Round(Math.Max(480, client.Bottom / dpi.DpiScaleY - 16) * dpi.DpiScaleY);
         int x = origin.X + client.Right - widthPx - 8;
@@ -471,6 +726,14 @@ public partial class MainWindow : Window
             case "app:pick":
                 PushColor(force: true);
                 break;
+            case "app:save":
+            {
+                var name = msg.TryGetProperty("name", out var n) ? n.GetString() : null;
+                var dataB64 = msg.TryGetProperty("data", out var d) ? d.GetString() : null;
+                var mime = msg.TryGetProperty("mime", out var m) ? m.GetString() : null;
+                SaveExport(name, mime, dataB64);
+                break;
+            }
             case "app:toggleAttach":
                 SetAttached(!_attached);
                 break;
@@ -478,15 +741,9 @@ public partial class MainWindow : Window
                 Close();
                 break;
             case "app:resize":
-                if (msg.TryGetProperty("width", out var w) && w.TryGetInt32(out var width))
-                {
-                    var clamped = Math.Clamp(width, 340, 520);
-                    if (Math.Abs(clamped - _panelWidth) > 6)
-                    {
-                        _panelWidth = clamped;
-                        if (_attached) FollowSai2();
-                    }
-                }
+                if (msg.TryGetProperty("width", out var w) && w.TryGetInt32(out var width)
+                    && Environment.GetEnvironmentVariable("CW_DEBUG") == "1")
+                    Log("page width " + width);
                 break;
         }
     }

@@ -2,14 +2,18 @@
    ColorWitch · SAI2 插件面板 · 嵌入脚本
    -------------------------------------------------------------------------
    用法：宿主加载 index.html?embed=1，页面加载完成后注入（先 embed.css，再
-   执行本文件）。本文件只做三件事：
-     1. 在 <html> 上挂 .cw-embed，把 index.html 改造成 380 宽的插件面板；
-     2. 接宿主消息桥（window.chrome.webview / window.__cwFromHost）；
-     3. 拖拽取色时按 ≤30Hz 节流发 app:apply。
+   执行本文件）。本文件不改动页面的任何功能，只做四件事：
+     1. 在 <html> 上挂 .cw-embed，让 embed.css 生效；
+     2. 量一次命令栏高度，交给 CSS 算内容区（#deck）的可用高度；
+     3. 在底部加 #cwBar：应用到 SAI2 / 读取当前色 / 实时同步 / 贴靠 / 状态点；
+     4. 接宿主消息桥，并在拖拽取色时按 ≤30Hz 节流发 app:apply。
+
+   原页面的全部模块（读数图、色板、历史、渐变、色卡、L/Y、切面开关、
+   四套数值、对比度、导出、保存图片、吸色、复制、链接、操作说明）都保留，
+   由页面自己的响应式断点决定 380 宽单列 / 1180 宽三栏。
 
    没有 ?embed=1 时本文件立即返回，普通打开 index.html 完全不受影响。
-   浏览器里没有 chrome.webview 时用 window.__cwHostMock 模拟宿主：控制台
-   打印每条消息，并回推 sai2:state / sai2:color / apply:ack 便于调试。
+   浏览器里没有 chrome.webview 时用 window.__cwHostMock 模拟宿主。
 
    契约见 plugin/CONTRACT.md。
    ========================================================================= */
@@ -30,52 +34,20 @@
     /* 防重复注入：宿主重载页面时 window 会重建，这里只防同一页面注入两次 */
     if (document.getElementById('cwBar')) return;
 
-    var deck = document.getElementById('deck');
-    var panel = document.getElementById('panel');
+    var cmd = document.querySelector('header.cmd');
     var cmdHex = document.getElementById('cmdHex');
     var hexIn = document.getElementById('hexIn');
-    var swatch = document.getElementById('swatch');
-    var sliderSec = panel && panel.querySelector('.sec.first');
-    if (!deck || !panel || !cmdHex || !hexIn || !swatch || !sliderSec) {
+    if (!cmdHex || !hexIn) {
       console.warn('[ColorWitch] 嵌入模式找不到必需的 DOM 节点（index.html 结构变了？）');
       return;
     }
 
-    /* ---- 1. 下方面板：当前色大色块 + HEX（附当前色/去色小色块） + 三条坐标 ---- */
-    var shelf = document.createElement('div');
-    shelf.id = 'cwShelf';
-
-    var well = document.createElement('div');
-    well.className = 'cw-well';
-    well.appendChild(swatch);          /* 当前色大色块（#swHex 随色翻转字色） */
-    shelf.appendChild(well);
-
-    /* HEX 行右侧两枚 16px 小色块：当前色 + 去色，用来对照失去饱和后的明度 */
-    var hexLine = document.createElement('div');
-    hexLine.className = 'cw-hexline';
-    hexLine.appendChild(panel.querySelector('.hexrow')); /* HEX 可编辑 */
-
-    var swatches = document.createElement('span');
-    swatches.className = 'cw-swatches';
-    var curSw = document.createElement('i');
-    curSw.className = 'cw-cur';
-    curSw.title = '当前色';
-    swatches.appendChild(curSw);
-    var grayWell = document.getElementById('swGray');
-    if (grayWell) {
-      grayWell.title = '去色预览';
-      swatches.appendChild(grayWell);  /* 页面脚本会同步它的底色和灰度值 */
+    /* ---- 1. 量命令栏高度：它会在窄宽度换行，内容区高度按实际值算 ---- */
+    function measureHeader() {
+      var h = cmd ? cmd.getBoundingClientRect().height : 46;
+      if (h > 0) document.documentElement.style.setProperty('--cw-cmd-h', Math.round(h) + 'px');
     }
-    hexLine.appendChild(swatches);
-    shelf.appendChild(hexLine);
-
-    var sliders = document.createElement('div');
-    sliders.className = 'cw-sliders';
-    var rows = sliderSec.querySelectorAll('.srow');
-    for (var i = 0; i < rows.length; i++) sliders.appendChild(rows[i]);
-    shelf.appendChild(sliders);
-
-    deck.appendChild(shelf);
+    measureHeader();
 
     /* ---- 2. 底部操作条 ---- */
     var bar = document.createElement('div');
@@ -85,7 +57,8 @@
     bar.innerHTML =
       '<button type="button" id="cwApply" class="cw-apply">应用到 SAI2</button>' +
       '<button type="button" id="cwRead" class="cw-btn" title="让宿主读一次 SAI2 前景色">读取当前色</button>' +
-      '<label class="chk cw-live" title="勾上后拖拽取色时实时写进 SAI2"><input type="checkbox" id="cwLive"><i></i><span>实时同步</span></label>' +
+      '<label class="cw-live" title="勾上后拖拽取色时实时写进 SAI2"><input type="checkbox" id="cwLive"><span>实时同步</span></label>' +
+      '<span class="cw-spacer"></span>' +
       '<span class="cw-tail">' +
         '<button type="button" id="cwAttach" class="cw-btn cw-attach" title="贴靠到 SAI2 侧边">贴靠</button>' +
         '<span id="cwStatus" class="cw-status" title="宿主桥接：未连接"><i></i></span>' +
@@ -113,9 +86,8 @@
     }
     function currentHex() { return normHex(cmdHex.textContent); }
 
-    /* 色块是否已用当前色；echo 用来吃掉“宿主推色 → 页面回写”这一圈 */
+    /* echo 用来吃掉「宿主推色 → 页面回写」这一圈 */
     var lastHex = currentHex();
-    curSw.style.background = lastHex;
     var echo = { hex: '', until: 0 };
     var realtime = liveBox.checked;
 
@@ -181,6 +153,32 @@
       ackTimer = setTimeout(function () { applyBtn.classList.remove('cw-ack'); }, 120);
     }
 
+    /* ---- 4. 页面导出：拦下载链接，内容交给宿主保存 ----
+       原页面用 <a download> + Blob 下载（CSS / JSON / GPL / ASE / 保存图片），
+       WebView2 里下载策略由环境决定；这里统一拦截，把字节发给宿主写文件，
+       任何嵌入式环境都能导出，且能弹原生保存对话框。 */
+    document.addEventListener('click', function (e) {
+      var t = e.target;
+      if (!t || t.nodeType !== 1) return;
+      var a = t.closest ? t.closest('a[download]') : null;
+      if (!a) return;
+      e.preventDefault();
+      e.stopPropagation();
+      var name = a.getAttribute('download') || 'colorwitch-export';
+      var href = a.href;
+      fetch(href).then(function (r) { return r.blob(); }).then(function (blob) {
+        var fr = new FileReader();
+        fr.onload = function () {
+          var s = String(fr.result || '');
+          var comma = s.indexOf(',');
+          post({ type: 'app:save', name: name, mime: blob.type || '', data: comma >= 0 ? s.slice(comma + 1) : s });
+        };
+        fr.readAsDataURL(blob);
+      }).catch(function (err) {
+        console.warn('[ColorWitch] 导出失败', err);
+      });
+    }, true);
+
     /* ---- 4. 取色 → 宿主：拖拽 30Hz 节流 live:true，松手补 live:false ---- */
     var dragActive = false;
     var dragDirty = false;
@@ -233,7 +231,6 @@
       var hex = currentHex();
       if (!hex || hex === lastHex) return;
       lastHex = hex;
-      curSw.style.background = hex;
       if (echo.hex === hex && Date.now() < echo.until) return; /* 宿主推来的色，不回写 */
       onColorChanged(hex);
     });
@@ -307,20 +304,20 @@
         }
       };
       window.__cwHostMock = mock;
-      /* 模拟宿主握手：浏览器里也能看到「已连接」和一条 SAI2 前景色 */
       handleHostMessage({ type: 'sai2:state', attached: true, visible: true, bridge: 'ok' });
       handleHostMessage({ type: 'sai2:color', hex: mock.color });
     }
 
     /* ---- 7. 让页面按新尺寸重排 + 上报宽度 ---- */
-    /* 宿主在页面初始化之后才注入，三维视口要按改造后的 #stage 尺寸重算。
-       页面自己用 ResizeObserver 观察 #stage，这里再主动推一次 resize 兜底。 */
-    function relayout() { window.dispatchEvent(new Event('resize')); }
+    var resizeTimer = 0;
+    function relayout() {
+      measureHeader();
+      window.dispatchEvent(new Event('resize'));
+    }
     relayout();
     requestAnimationFrame(relayout);
     setTimeout(relayout, 80);
 
-    var resizeTimer = 0;
     function reportWidth() {
       var w = Math.round(document.documentElement.clientWidth || window.innerWidth || 0);
       if (w) post({ type: 'app:resize', width: w });
@@ -328,7 +325,10 @@
     reportWidth();
     window.addEventListener('resize', function () {
       clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(reportWidth, 200);
+      resizeTimer = setTimeout(function () {
+        relayout();
+        reportWidth();
+      }, 120);
     });
   }
 

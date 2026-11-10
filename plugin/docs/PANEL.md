@@ -1,134 +1,83 @@
-# ColorWitch for SAI2 · 面板嵌入说明
+# 面板嵌入实现（embed.css / embed.js）
 
-`index.html` 原样保留，插件面板靠宿主在页面加载后注入两个文件实现，不需要改 ColorWitch 本体。
+把原版 `index.html` 变成 SAI2 面板：**不改页面结构、不隐藏功能**，只在页面外面加一条 SAI2 操作条，并接入宿主消息桥。
 
-```
-plugin/
-├── embed.css            嵌入模式样式（全部规则挂在 html.cw-embed 下）
-├── embed.js             嵌入模式脚本：重排 DOM、底部操作条、宿主消息桥
-└── docs/
-    ├── PANEL.md         本文件
-    └── panel-preview.png 380 × 820 预览
-```
-
-![面板预览](panel-preview.png)
+![紧凑面板](panel-preview.png)
+![完整界面](panel-wide.png)
 
 ## 宿主注入顺序
 
-宿主是 WPF + WebView2，面板固定 380 宽（可调 340–520），高度跟随宿主。**必须等 `NavigationCompleted` 之后再注入**，此时页面脚本已经初始化完毕：
+宿主（`ColorWitch.Sai2.exe`）用 `https://colorwitch.local/` 虚拟主机加载 `index.html?embed=1`，在 `NavigationCompleted` 之后：
 
-1. 加载 `index.html?embed=1`（`embed=1` 必须带：没有它 embed.js 直接返回，页面保持普通 Atlas 的完整界面）。
-2. 往 `document.head` append 一个 `<style id="cw-embed-style">`，内容是 `embed.css` 全文。
-3. `ExecuteScriptAsync(embed.js 全文)`。
+1. `ExecuteScriptAsync(prelude)`：挂 `window.__cwLog`，把页面里的 `error` / `console.error` / `console.warn` 转进宿主日志（只在 `CW_DEBUG=1` 时写文件）。
+2. 注入 `<style id="cw-embed-style">`，内容是 `embed.css`。
+3. `ExecuteScriptAsync(embed.js)`：挂 `html.cw-embed`、量命令栏高度、建 `#cwBar`、接桥、加导出拦截。
+4. 宿主推 `sai2:state` / `sai2:color` 做首次同步。
 
-embed.js 执行时会依次：给 `<html>` 挂 `cw-embed` → 把需要的节点搬进下方面板 → 建底部操作条 → 定义 `window.__cwFromHost` → 派发一次 `window.resize` 让三维视口按改造后的尺寸重排，并立即上报 `app:resize`。
+`embed.js` 自身也判断 `?embed=1`，普通打开 `index.html` 时直接返回，没有任何副作用。
 
-C# 示例：
+## 嵌入后页面做了什么
 
-```csharp
-webView.CoreWebView2.NavigationCompleted += async (_, e) =>
-{
-    if (!e.IsSuccess) return;
-    var css = await File.ReadAllTextAsync(Path.Combine(pluginDir, "embed.css"));
-    var js  = await File.ReadAllTextAsync(Path.Combine(pluginDir, "embed.js"));
+| 改动 | 说明 |
+|---|---|
+| `html` 加 `.cw-embed` | `embed.css` 的所有规则都挂在这个 class 下 |
+| 量 `header.cmd` 高度 → `--cw-cmd-h` | 命令栏在窄宽度会换行，内容区按实际高度算 |
+| `#deck` 高度 = `100dvh − 命令栏 − 底栏` | 页面自己的滚动（`#panel` / `#deck`）继续工作 |
+| 底部加 `#cwBar` | 应用到 SAI2 / 读取当前色 / 实时同步 / 贴靠 / 状态点 |
+| 接 `window.__cwFromHost` | 宿主推来的状态与颜色 |
+| 拦截 `<a download>` 点击 | 导出交给宿主保存（见下） |
 
-    await webView.CoreWebView2.ExecuteScriptAsync(
-        "(function(){var s=document.createElement('style');s.id='cw-embed-style';" +
-        "s.textContent=" + JsonSerializer.Serialize(css) + ";" +
-        "document.head.appendChild(s);})()");
+**没有移动、隐藏或删除任何原页面模块。** 380 宽时靠页面自己的 `@media (max-width:940px)` 变成单列滚动；1180 宽时是原版三栏。
 
-    await webView.CoreWebView2.ExecuteScriptAsync(js);
-};
+## 两档布局
 
-// 宿主 → JS：把对象序列化后调用 window.__cwFromHost
-await webView.CoreWebView2.ExecuteScriptAsync(
-    "window.__cwFromHost(" + JsonSerializer.Serialize(payload) + ")");
-```
+| 档位 | 宽度 | 布局 |
+|---|---|---|
+| 紧凑 | 380（窗口 DIP） | 单列滚动：命令栏 → 视口 → V/L 读数盘 → 色板/滑条/L·Y/切面/数值/HEX/对比度/渐变/色卡/导出 |
+| 完整 | SAI2 客户区宽 − 40（≤1440） | 原版三栏：读数盘 / 视口 / 整备栏 |
 
-## 消息契约
+标题条的「完整 / 紧凑」按钮切换（`LayoutButton`），面板高度始终跟随 SAI2 客户区。两档下功能完全一致，只是排布不同。
 
-### JS → 宿主：`window.chrome.webview.postMessage(object)`
+## 颜色桥（宿主 ↔ 页面）
 
-| type | 字段 | 时机 |
-| --- | --- | --- |
-| `app:apply` | `hex: "#RRGGBB"`, `live: bool` | 点「应用到 SAI2」；或「实时同步」勾选后颜色变化（`live:true` 为拖拽中的连续更新，`live:false` 为落定值） |
-| `app:pick` | — | 点「读取当前色」，请求宿主回推一次前景色 |
-| `app:toggleAttach` | — | 点「贴靠 / 浮动」 |
-| `app:resize` | `width: number` | 面板加载完成、窗口宽度变化（200ms 防抖） |
+页面 → 宿主：
 
-拖拽取色时 `live:true` 限制在 **≤30Hz**（34ms 间隔），松手 / 指针取消 / 窗口失焦时补一条 `live:false`；连续相同的 live 色值不会重复发送。非拖拽的颜色变化（点历史、改 HEX、点滑条）在 160ms 防抖后发一条 `live:false`。
+- 拖拽三维视口或滑条时按 ≤30 Hz 发 `{type:'app:apply', hex, live:true}`，松手补一条 `live:false`；同一色值去重。
+- 点「应用到 SAI2」/「读取当前色」/「贴靠」分别发 `app:apply{live:false}` / `app:pick` / `app:toggleAttach`。
 
-### 宿主 → JS：`window.__cwFromHost(msg)`
+宿主 → 页面：
 
-`msg` 是已解析对象（也接受 JSON 字符串）。宿主每次调用只传一条：
+- `sai2:state{attached,visible,bridge}` → 底栏按钮文案与状态点（ok 荧光蓝 / unsupported 灰 / error 红）。
+- `sai2:color{hex}` → 写进 `#hexIn` 并派发 `input`，页面自己的换算/校验接管；600 ms 内不吃回自己的推送（避免抖动）。
+- `apply:ack{ok}` → 主按钮反色 120 ms。
 
-| type | 字段 | 效果 |
-| --- | --- | --- |
-| `sai2:state` | `attached: bool`, `visible: bool`, `bridge: "ok" \| "unsupported" \| "error"` | 刷新状态点（墨色 / 灰 / 红）与「贴靠 ↔ 浮动」按钮文字 |
-| `sai2:color` | `hex: "#RRGGBB"` | 把面板当前色改成该值（写进 HEX 输入框并触发页面自己的换算，不会回写成 apply） |
-| `apply:ack` | `ok: bool`, `hex` | `ok` 时主按钮反色 120ms 作确认 |
+## 导出 / 保存图片
 
-> 兼容：如果宿主改用 `PostWebMessageAsJson`，embed.js 也会通过 `chrome.webview` 的 `message` 事件收到同样的对象。
+原页面导出（CSS / JSON / GPL / ASE / 保存图片）都是「造一个 `<a download>` + Blob URL → `a.click()`」。WebView2 的下载策略随环境而变，因此 `embed.js` 在 document 捕获阶段拦截带 `download` 的锚点：
 
-### 非 WebView2 环境（浏览器调试）
+1. `preventDefault()`；
+2. `fetch(blobUrl)` → `FileReader.readAsDataURL`；
+3. `postMessage({type:'app:save', name, mime, data})`；
+4. 宿主弹 `SaveFileDialog` 写文件，回 `save:ack`。
 
-没有 `window.chrome.webview` 时，JS→宿主改为 `window.__cwHostMock.postMessage(msg)`：
+这样导出不依赖浏览器下载行为，任何嵌入式环境都能用。
 
-- 控制台打印 `[ColorWitch → 宿主 mock] type {…}`；
-- 维护一个模拟的 SAI2 前景色（默认 `#D9663D`，改 `window.__cwHostMock.color` 即可）；
-- `app:apply` 回 `apply:ack`、`app:pick` 回 `sai2:color`、`app:toggleAttach` 回 `sai2:state`；
-- 启动时模拟一次宿主握手（`sai2:state {bridge:"ok"}` + 一条 `sai2:color`），所以浏览器里直接打开 `index.html?embed=1` 也能看到完整状态。
+## 宿主提供的运行环境
 
-## DOM 依赖
+| 能力 | 说明 |
+|---|---|
+| 来源 | `https://colorwitch.local`（`SetVirtualHostNameToFolderMapping` 指向安装目录） |
+| 安全上下文 | 是（`EyeDropper` 可用，实测 `typeof EyeDropper === "function"`） |
+| 剪贴板 | `navigator.clipboard.writeText` 可用（复制 HEX / 复制链接 / 复制渐变） |
+| `localStorage` | 可用（色板、自建色卡持久化） |
+| WebGL | 可用（三维视口） |
+| 缩放 | 跟随系统 DPI，页面按 CSS px 响应式 |
 
-embed.js 只依赖 index.html 现有的节点（按 id / class 取，取不到会在控制台告警并保持原页面不动）：
+## 验证记录（离屏窗口 + WebView2 截图/探针）
 
-| 用途 | 节点 | 处理 |
-| --- | --- | --- |
-| 三维视口 | `#stage`、`#gl`、`#path`、`#hud` | 保留；`#stage` 固定 340px 高，随窗口高度可压缩到 220px |
-| 视口工具 | `.tools.top`（默认 / 俯视 / 平视 / 网格） | 保留；`.tools.export`（保存图片）隐藏 |
-| 空间切换 | `#spHsv`、`#spHvs`、`#spOk` | 保留原样 |
-| 顶栏当前色 | `#cmdHex` | 保留；embed.js 用它感知颜色变化 |
-| 当前色大色块 | `#swatch`（内含 `#swHex`） | 从右栏移进 `#cwShelf`，成为大色块 |
-| HEX 输入 | `.hexrow` → `#hexIn` | 从右栏移进 `#cwShelf` 的 HEX 行 |
-| 当前色 / 去色小色块 | `#cmdHex` 色值 + `#swGray` | HEX 行右端两枚 16px 直角色块：新建的当前色块跟着 `#cmdHex` 刷底色，去色那块复用 `#swGray`（隐藏它自带的文字） |
-| 历史色带 | `#histRow` | 留在隐藏的 `#panel` 里，不显示；`Ctrl+Z` 撤销仍可用 |
-| 三条坐标 | `.sec.first` 里的三个 `.srow`（`#hRange/#hNum`、`#sRange/#sNum`、`#vRange/#vNum`） | 移进 `#cwShelf`；切到 OKLCH 时标签/量程由页面自己换成 H / C / L |
-| 左栏读数 | `#rail` | 隐藏（两张俯视图仍按原逻辑小尺寸绘制，不占位） |
-| 右栏整备 | `#panel` 其余部分（色板、收藏、L/Y、切面开关、四套数值、对比度、渐变、色卡、导出） | 隐藏 |
-| 顶栏按钮 | `吸色 / 复制 / 链接` | 隐藏；`操作说明` 保留 |
-| 页面装饰 | `.tri`（顶部三色条） | 隐藏，面板顶部从命令栏开始 |
-
-`index.html` 的结构变了、某个节点取不到时，embed.js 只告警不改造页面（不会留下半成品布局）。
-
-## 交互
-
-- **三维色体**：中键旋转、滚轮缩放、左键取色、右键上下拖改竖直坐标；双击复位；右上角视角预设与网格照旧。
-- **当前色区**：整宽大色块（左下角 HEX 随底色翻黑/翻白）；下面一行是 HEX 输入，右端两枚 16px 小色块 —— 左为当前色、右为去色预览，只做对照不可点。
-- **底部操作条**（44px，纸面底 + `#D9D9D6` 细线，从左到右均分）：
-  - `应用到 SAI2`：荧光蓝填充、白字、右下切角；`apply:ack ok` 时反色 120ms。
-  - `读取当前色`：发 `app:pick`，宿主回 `sai2:color`。
-  - `实时同步`：勾上后拖拽取色实时写进 SAI2（≤30Hz live，松手补 live:false）；勾选瞬间先同步一次当前色。
-  - `贴靠 / 浮动`：发 `app:toggleAttach`，按钮文字跟 `sai2:state.attached` 变。
-  - 状态点：只有一枚 6px 圆点，距右边缘 8px —— 已连接荧光蓝 `#1F51FF`、未连接灰 `#D9D9D6`、错误红 `#B3261E`；状态文字放在 `title` 里，不占版面。
-- 顶栏：HSV / HVS / OKLCH 切换、16px 当前 HEX、操作说明；空间切换与视口手势全部沿用原页面。
-
-## 宽度适配
-
-- 380 是设计基准；340–369 时底栏收紧间距（8px 内边距、4px 间隙），主按钮略窄，其余弹性。
-- 面板宽度 340–520、高度由宿主给：`#deck` 是列向 flex，色块吃掉剩余高度；页面 `overflow:hidden`，任何尺寸都没有横向滚动条。
-
-## 已知限制
-
-- 面板里**没有**：色板收藏、渐变编辑、色卡、L/Y 目标值、等亮度/等灰度切面开关、四套数值、对比度、导出、两张读数图、保存图片、吸色 / 复制 / 链接。要这些功能请直接打开普通 `index.html`。
-- 历史色带在面板里隐藏；`Ctrl+Z / ⌘Z` 撤销上一步颜色仍可用（页面自己的快捷键，不经过面板）。
-- 需要 WebGL；不可用时页面自己的 `#fatal` 会给出提示。
-- 视觉沿用 README 的设计系统（纸面 / 板 / 墨 / 细线 / 荧光蓝，9.5–12px 五档字号，无圆角阴影），不引入外部字体、图标或资源；Saira 字体在 index.html 内嵌。
-
-## 验证
-
-`panel-preview.png` 是 **380 × 820** 整帧截图：用 msedge headless 打开普通 `index.html?embed=1`，按上面的「注入顺序」在同一页面里注入 `embed.css` + `embed.js`（即宿主真实路径），再用 CDP 把视口固定为 380×820 后截图。
-
-> 本机 Chrome / Edge 的 `--headless=new --window-size=380,820` 会被窗口最小宽度限制（实际视口约 514×722），所以改由 CDP `Emulation.setDeviceMetricsOverride` 精确锁定 380×820；渲染引擎与宿主相同（Chromium + SwiftShader WebGL）。
-
-自检过：三维视口正常渲染、大色块 / HEX / 三条坐标 / 底栏齐全；`scrollWidth === clientWidth`、`scrollHeight === clientHeight`（无横/纵向滚动，底栏贴住面板底边）；380×820、380×794、316×800 三种视口都验证过。
+- 380 CSS 宽：`missing=0`，`hidden` 只出现在原页面默认折叠的渐变/色卡内容与关闭中的说明对话框；`deck` 可滚动到底（scrollHeight 1388 > 640）；无横向滚动。
+- 1093 CSS 宽（完整档）：三栏布局，全部模块可见；`missing=0`。
+- 能力探针：`localStorage=true`、`eyeDropper=function`、`clipboard=true`、`webgl=true`。
+- 导出：CDP 真实点击「保存图片」→ 宿主写出 `exports\atlas-<hex>.png`（183 KB，可打开）。
+- 颜色桥：宿主推 `#3366CC` → 页面 `#cmdHex`/`#hexIn`/大色块同步；点「应用到 SAI2」→ 宿主收到 `app:apply`。
+- 贴靠：面板窗口贴在 SAI2 客户区右侧 8px，高度随 SAI2 客户区。

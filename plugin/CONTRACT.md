@@ -26,12 +26,21 @@ ColorWitch/                        (git 分支 feat/sai2-plugin)
 宿主启动后：
 1. 找到 SAI2 主窗口（`sflRootWindow`，进程 sai2.exe）。
 2. 把面板窗口贴到 SAI2 客户区右侧（跟随 SAI2 移动/缩放/最小化；可脱离成浮动窗口）。
-3. WebView2 载入 `index.html?embed=1`，注入 `embed.css` + `embed.js`。
+3. WebView2 用 **https 虚拟主机**（`https://colorwitch.local/` → 安装目录）载入 `index.html?embed=1`，
+   注入 `embed.css` + `embed.js`。用 https 虚拟主机是为了拿到安全上下文与稳定来源：
+   剪贴板、`EyeDropper`、`localStorage` 都与普通网页一致。
 4. 双向颜色桥：读 SAI2 前景色、写 SAI2 前景色。
 
-## 面板尺寸
+## 面板尺寸与两档布局
 
-默认 **380 × 820**（宽固定可调 340–520，高跟随 SAI2 客户区高度）。启动时窗口在 SAI2 右侧 8px 内边距处。
+面板默认 **380 宽**（紧凑），宽高跟随 SAI2 客户区；标题条上的「完整」按钮切到 **完整界面**（宽 = SAI2 客户区宽度 − 40，最多 1440），再点「紧凑」切回。
+
+两档布局都渲染**原版 index.html 的全部模块**，没有隐藏功能：
+
+- 紧凑（<940 CSS px）：原页面自带的响应式单列布局 —— 命令栏（吸色/复制/链接/操作说明）、三维视口、V/L 两张读数盘、色板、H/S/V 滑条、L/Y、切面开关、四套数值、HEX、对比度、渐变、色卡、导出，全部在页面里纵向滚动可达。
+- 完整（≥940 CSS px）：原版三栏布局 —— 左读数盘 / 中视口 / 右整备栏。
+
+宽度只由宿主决定（`LayoutButton`），页面不再反向改宿主尺寸；`app:resize` 仅用于调试日志。
 
 ## JS ↔ 宿主 消息契约
 
@@ -42,6 +51,7 @@ ColorWitch/                        (git 分支 feat/sai2-plugin)
 | `sai2:state` | `attached: bool`, `visible: bool`, `bridge: "ok" \| "unsupported" \| "error"` | 连接状态 |
 | `sai2:color` | `hex: "#RRGGBB"` | SAI2 前景色（外部改动时推送） |
 | `apply:ack` | `ok: bool`, `hex` | 写色结果 |
+| `save:ack` | `ok: bool` | 导出文件落盘结果 |
 
 JS → 宿主：
 
@@ -51,9 +61,12 @@ JS → 宿主：
 | `app:pick` | — | 请求宿主立即读一次 SAI2 当前前景色并回推 |
 | `app:toggleAttach` | — | 贴靠 / 浮动切换 |
 | `app:close` | — | 关闭面板（不关 SAI2） |
-| `app:resize` | `width: number` | 面板宽度 |
+| `app:resize` | `width: number` | 面板宽度（仅供调试） |
+| `app:save` | `name`, `mime`, `data`(base64) | 页面导出：`embed.js` 拦截 `<a download>`，把字节交给宿主保存 |
 
-非 WebView2 环境（普通浏览器调试）时，`embed.js` 用 `window.__cwHostMock` 模拟，方便 T2 单独验证 UI。
+导出的 CSS / JSON / GPL / ASE / PNG 都由宿主弹出原生保存对话框（离屏/自动测试模式写到 exe 旁 `exports\`）。
+
+非 WebView2 环境（普通浏览器调试）时，`embed.js` 用 `window.__cwHostMock` 模拟，方便单独验证 UI。
 
 ## 颜色桥（T1 产出）
 
